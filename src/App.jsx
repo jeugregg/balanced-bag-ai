@@ -17,6 +17,10 @@ import React, { useState, useEffect } from "react";
       const [balances, setBalances] = useState({});
       const [error, setError] = useState(null);
 
+      // Access the API key from environment variables
+      const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
+      console.log("Brian API Key:", brianApiKey);
+
       const handleConnectWallet = async () => {
         try {
           console.log("enter");
@@ -98,6 +102,22 @@ import React, { useState, useEffect } from "react";
                       <td>{balance}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+
+              <h3>Table by Brian AI</h3> {/* New table */}
+              <table>
+                <thead>
+                  <tr>
+                    <th className="table-header">Asset</th>
+                    <th className="table-header">Quantity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>USDC</td>
+                    <td>{balances.USDC || "0"}</td> {/* Display USDC balance or 0 if undefined */}
+                  </tr>
                 </tbody>
               </table>
             </>
