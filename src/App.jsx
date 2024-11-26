@@ -3,31 +3,103 @@ import React, { useState, useEffect } from "react";
     import { connect } from '@starknet-io/get-starknet';
     import { BrianSDK } from "@brian-ai/sdk";
     // Replace with actual token contract addresses
-    const tokenAddresses = {
+    const tokenAddresses_default = {
       ETH: "0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7",
-      STARK: "0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D",
+      STRK: "0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D",
       USDC: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
       USDT: "0x068F5c6a61780768455de69077E07e89787839bf8166dEcfBf92B645209c0fB8",
       WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac" // WBTC contract address
     };
 
+    async function getMarket() {
+      const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', { 
+        method: 'GET', 
+        headers: {}, 
+      });
+      
+      const data = await response.json();
+      
+      // Check if data is valid JSON before storing
+      if (typeof data === 'object') {
+        try {
+          localStorage.setItem('starknetTokens', JSON.stringify(data));
+          console.log('Starknet tokens saved to localStorage.');
+          return data; 
+        } catch (error) {
+          console.error('Error saving Starknet tokens to localStorage:', error);
+        }
+      } else {
+        console.error('Invalid JSON data received from API.');
+      }
+      return null;
+    }
+
+    function getMarketTokenSymbol() {
+      const storedTokens = localStorage.getItem('starknetTokens');
+      const tokens = JSON.parse(storedTokens);
+      // get all token symbol 
+      // tokens is a list of data like that : 
+      // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
+      //const tokenSymbols = tokens.map(token => token.symbol).filter(symbol => symbol != "\b8");
+      const tokenSymbols = tokens.map(token => token.symbol);
+      return tokenSymbols;
+    }
+
+    function getMarketTokenAddress() {
+      const storedTokens = localStorage.getItem('starknetTokens');
+      const tokens = JSON.parse(storedTokens);
+      // get all token symbol 
+      // tokens is a list of data like that : 
+      // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
+      // return structure  {token1:  address1, token2: address2...} 
+      let tokenAddresses = tokens.map(token => ({[token.symbol]: token.address}));
+      tokenAddresses = tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.address }), {});
+      return tokenAddresses;
+    }
+
     // Assuming brianBalances is an array of objects returned by the Brian API
-
-    function checkBrianBalances(brianBalances, token) {
-      if (!brianBalances || brianBalances.length === 0) {
-        return false; // No balances to check
+    function extractBrianBalances(brianBalance) {
+      if (!brianBalance || brianBalance.length === 0) {
+        return 0; // No balances to check
       }
 
-      const extractedParams = brianBalances[0]["extractedParams"];
+      const extractedParams = brianBalance["extractedParams"];
       if (!extractedParams) {
-        return false; // No extractedParams found
+        return 0; // No extractedParams found
       }
 
-      return (
+      if (
         extractedParams.action === "balance" &&
-        extractedParams.token1 === token && // Use the token parameter here
         extractedParams.chain === "Starknet"
-      );
+      ) {
+        const token =  brianBalance["extractedParams"]["token1"];
+        const balance = parseFloat(brianBalance["data"]["formattedValue"]);
+        // return a structure {token: balance}
+        return { [token]: balance };
+      }
+    }
+
+    function extractAllBrianBalances(brianBalances) {
+      if (!brianBalances || brianBalances.length === 0) {
+        return 0; // No balances to check
+      }
+      // for all elems in brianBalances get token balanc into a structure
+      // use token symbol as key, and balance as value, list of structure
+      // use extractBrianBalances for each elem in brianBalances
+      const extractedBalances = [];
+      for (const brianBalance of brianBalances) {
+        const balance = extractBrianBalances(brianBalance);
+        if (balance !== 0) {
+          const symbol = brianBalance["extractedParams"]["symbol"];
+          // append balance structure to array extractedBalances
+          extractedBalances.push(balance);
+          //extractedBalances[symbol] = balance;
+        }
+      }
+      return extractedBalances;
+
+
+
     }
 
     function App() {
@@ -44,6 +116,9 @@ import React, { useState, useEffect } from "react";
       };
       console.log("Brian API Key:", brianApiKey);
       const brian = new BrianSDK(options);
+      
+
+
 
       const handleConnectWallet = async () => {
         try {
@@ -62,6 +137,12 @@ import React, { useState, useEffect } from "react";
           console.log(account);
           setAccount(account);
           setMyWalletAccount(newWalletAccount);
+          const market = await getMarket();
+          if (market == null) {
+            setError("No price feed");
+          }
+          console.log("market:");
+          console.log(market);
         } catch (err) {
           console.error("Error connecting wallet:", err);
           setError(err.message);
@@ -73,7 +154,7 @@ import React, { useState, useEffect } from "react";
           if (account && myWalletAccount) {
             const newBalances = {};
             const provider = new RpcProvider({ nodeUrl: constants.NetworkName.SN_MAIN }); // Create RpcProvider
-
+            const tokenAddresses = getMarketTokenAddress();
             for (const token in tokenAddresses) {
               try {
                 console.log(tokenAddresses[token]);
@@ -105,38 +186,31 @@ import React, { useState, useEffect } from "react";
         // fetch balance with brian api
         const fetchBalancesWithBrian = async () => {
           if (account && myWalletAccount) {
-            try {
-              const brianBalances = await brian.transact({
-                prompt: "Get wallet balance in USDC on Starknet",
-                "address": account
-              });
-              //setBalances(brianBalances);
-              console.log("brianBalances:", brianBalances);
-              // check if brianBalances[0]["extractedParams"] contains these fields :
-              //   action: "balance",
-              //   token1: "USDC",
-              //   chain: "Starknet"
-              // Check for a different token (e.g., ETH)
-              if (checkBrianBalances(brianBalances, "USDC")) {
-                console.log("brianBalances[0] contains the specified fields for ");
-              } else {
-                console.log("brianBalances[0] does not contain the specified fields for");
-              }
-              
-              const nb_token = brianBalances[0]["data"]["formattedValue"];
-              console.log("nb_token:", nb_token);
-
-              setBalancesWithBrian(nb_token);
-            } catch (err) {
-              console.error("Error fetching balance with Brian:", err);
-              setError(err.message);
+            const tokenSymbols = getMarketTokenSymbol();
+            console.log("tokenSymbols:");
+            console.log(tokenSymbols);
+            let str_prompt_tokens = "Get wallet balance in ";
+            for (const token in tokenSymbols) {
+              // concat all symbols in one string
+              str_prompt_tokens += tokenSymbols[token] + ", " ;
             }
+            str_prompt_tokens +="on Starknet";
+            console.log(str_prompt_tokens);
 
+            const brianBalances = await brian.transact({
+              prompt: str_prompt_tokens,
+              "address": account
+            });
+
+            const newBrianBalances = extractAllBrianBalances(brianBalances);
+
+          setBalancesWithBrian(newBrianBalances); 
           }
+          
         };
-
+    
         fetchBalances();
-        fetchBalancesWithBrian();
+        //fetchBalancesWithBrian();
       }, [account, myWalletAccount]);
 
       return (
@@ -172,10 +246,12 @@ import React, { useState, useEffect } from "react";
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td>USDC</td>
-                    <td>{balancesWithBrian || "0"}</td> {/* Display USDC balance or 0 if undefined */}
-                  </tr>
+                  {Object.entries(balancesWithBrian || {}).map(([token, balance]) => ( 
+                    <tr key={token}>
+                      <td>{token}</td>
+                      <td>{balance || "0"}</td> 
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </>
