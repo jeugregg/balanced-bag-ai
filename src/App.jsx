@@ -18,7 +18,7 @@ import React, { useState, useEffect } from "react";
       const [error, setError] = useState(null);
 
       // Access the API key from environment variables
-      const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
+      const brianApiKey = import.meta.env.local.BRIAN_API_KEY;
       console.log("Brian API Key:", brianApiKey);
 
       const handleConnectWallet = async () => {
