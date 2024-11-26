@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
     import { Contract, WalletAccount, uint256, constants, RpcProvider } from "starknet";
     import { connect } from '@starknet-io/get-starknet';
+    import { BrianSDK } from "@brian-ai/sdk";
     // Replace with actual token contract addresses
     const tokenAddresses = {
       ETH: "0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7",
@@ -10,15 +11,39 @@ import React, { useState, useEffect } from "react";
       WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac" // WBTC contract address
     };
 
+    // Assuming brianBalances is an array of objects returned by the Brian API
+
+    function checkBrianBalances(brianBalances, token) {
+      if (!brianBalances || brianBalances.length === 0) {
+        return false; // No balances to check
+      }
+
+      const extractedParams = brianBalances[0]["extractedParams"];
+      if (!extractedParams) {
+        return false; // No extractedParams found
+      }
+
+      return (
+        extractedParams.action === "balance" &&
+        extractedParams.token1 === token && // Use the token parameter here
+        extractedParams.chain === "Starknet"
+      );
+    }
+
     function App() {
       const [myWalletAccount, setMyWalletAccount] = useState(null);
       const [account, setAccount] = useState(null);
       const [balances, setBalances] = useState({});
+      const [balancesWithBrian, setBalancesWithBrian] = useState(null);
       const [error, setError] = useState(null);
 
       // Access the API key from environment variables
       const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
+      const options = {
+        apiKey: brianApiKey,
+      };
       console.log("Brian API Key:", brianApiKey);
+      const brian = new BrianSDK(options);
 
       const handleConnectWallet = async () => {
         try {
@@ -77,7 +102,41 @@ import React, { useState, useEffect } from "react";
           }
         };
 
+        // fetch balance with brian api
+        const fetchBalancesWithBrian = async () => {
+          if (account && myWalletAccount) {
+            try {
+              const brianBalances = await brian.transact({
+                prompt: "Get wallet balance in USDC on Starknet",
+                "address": account
+              });
+              //setBalances(brianBalances);
+              console.log("brianBalances:", brianBalances);
+              // check if brianBalances[0]["extractedParams"] contains these fields :
+              //   action: "balance",
+              //   token1: "USDC",
+              //   chain: "Starknet"
+              // Check for a different token (e.g., ETH)
+              if (checkBrianBalances(brianBalances, "USDC")) {
+                console.log("brianBalances[0] contains the specified fields for ");
+              } else {
+                console.log("brianBalances[0] does not contain the specified fields for");
+              }
+              
+              const nb_token = brianBalances[0]["data"]["formattedValue"];
+              console.log("nb_token:", nb_token);
+
+              setBalancesWithBrian(nb_token);
+            } catch (err) {
+              console.error("Error fetching balance with Brian:", err);
+              setError(err.message);
+            }
+
+          }
+        };
+
         fetchBalances();
+        fetchBalancesWithBrian();
       }, [account, myWalletAccount]);
 
       return (
@@ -115,7 +174,7 @@ import React, { useState, useEffect } from "react";
                 <tbody>
                   <tr>
                     <td>USDC</td>
-                    <td>{balances.USDC || "0"}</td> {/* Display USDC balance or 0 if undefined */}
+                    <td>{balancesWithBrian || "0"}</td> {/* Display USDC balance or 0 if undefined */}
                   </tr>
                 </tbody>
               </table>
