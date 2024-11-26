@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
     import { Contract, WalletAccount, uint256, constants, RpcProvider } from "starknet";
-    import { connect } from "get-starknet";
-
+    import { connect } from '@starknet-io/get-starknet';
     // Replace with actual token contract addresses
     const tokenAddresses = {
       ETH: "0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7",
@@ -18,7 +17,7 @@ import React, { useState, useEffect } from "react";
       const [error, setError] = useState(null);
 
       // Access the API key from environment variables
-      const brianApiKey = import.meta.env.local.BRIAN_API_KEY;
+      const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
       console.log("Brian API Key:", brianApiKey);
 
       const handleConnectWallet = async () => {
