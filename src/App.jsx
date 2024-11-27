@@ -8,7 +8,7 @@ import React, { useState, useEffect } from "react";
       STRK: "0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D",
       USDC: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
       USDT: "0x068F5c6a61780768455de69077E07e89787839bf8166dEcfBf92B645209c0fB8",
-      WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac" // WBTC contract address
+      WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac" 
     };
 
     async function getMarket() {
@@ -46,15 +46,29 @@ import React, { useState, useEffect } from "react";
     }
 
     function getMarketTokenAddress() {
+      // get all token address from localstorage
       const storedTokens = localStorage.getItem('starknetTokens');
       const tokens = JSON.parse(storedTokens);
       // get all token symbol 
       // tokens is a list of data like that : 
       // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
       // return structure  {token1:  address1, token2: address2...} 
-      let tokenAddresses = tokens.map(token => ({[token.symbol]: token.address}));
-      tokenAddresses = tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.address }), {});
+      //let tokenAddresses = tokens.map(token => ({[token.symbol]: token.address}));
+      const tokenAddresses = tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.address }), {});
       return tokenAddresses;
+    }
+
+    function getMarketTokenPrice() {
+      // get all token price from localstorage
+      const storedTokens = localStorage.getItem('starknetTokens');
+      const tokens = JSON.parse(storedTokens);
+      // get all token symbol 
+      // tokens is a list of data like that : 
+      // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
+      // return structure  {token1:  address1, token2: address2...} 
+      //let tokenPrices = tokens.map(token => ({[token.symbol]: token.market.currentPrice}));
+      const tokenPrices = tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.market.currentPrice }), {});
+      return tokenPrices;
     }
 
     // Assuming brianBalances is an array of objects returned by the Brian API
@@ -98,8 +112,6 @@ import React, { useState, useEffect } from "react";
       }
       return extractedBalances;
 
-
-
     }
 
     function App() {
@@ -108,17 +120,18 @@ import React, { useState, useEffect } from "react";
       const [balances, setBalances] = useState({});
       const [balancesWithBrian, setBalancesWithBrian] = useState(null);
       const [error, setError] = useState(null);
+      const [isLoading, setIsLoading] = useState(true);
+      const [totalWalletValue, setTotalWalletValue] = useState(0);
 
       // Access the API key from environment variables
       const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
+      const rcpApiKey = import.meta.env.VITE_RCP_API_KEY; 
       const options = {
         apiKey: brianApiKey,
       };
       console.log("Brian API Key:", brianApiKey);
       const brian = new BrianSDK(options);
       
-
-
 
       const handleConnectWallet = async () => {
         try {
@@ -152,34 +165,65 @@ import React, { useState, useEffect } from "react";
       useEffect(() => {
         const fetchBalances = async () => {
           if (account && myWalletAccount) {
-            const newBalances = {};
-            const provider = new RpcProvider({ nodeUrl: constants.NetworkName.SN_MAIN }); // Create RpcProvider
+            let newBalances = {};
+            //const provider = new RpcProvider({ nodeUrl: constants.NetworkName.SN_MAIN }); // Create RpcProvider
+            const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno", headers: {'x-apikey': rcpApiKey} }); // Create RpcProvider
             const tokenAddresses = getMarketTokenAddress();
-            for (const token in tokenAddresses) {
-              try {
-                console.log(tokenAddresses[token]);
-                const { abi: abi } = await provider.getClassAt(tokenAddresses[token]); // Fetch ABI using class hash
-                const contract = new Contract(abi, tokenAddresses[token], myWalletAccount);
+            const tokenPrices = getMarketTokenPrice();
+            try {
+              for (const token in tokenAddresses) {
+                try {
+                  console.log(tokenAddresses[token]);
+                  const { abi: abi } = await provider.getClassAt(tokenAddresses[token]); // Fetch ABI using class hash
+                  const contract = new Contract(abi, tokenAddresses[token], myWalletAccount);
 
-                // Fetch balance and decimals
-                const balanceResponse = await contract.balanceOf(account);
-                const decimalsResponse = await contract.decimals(); // Assuming the token has a "decimals" function
+                  // Fetch balance and decimals
+                  const balanceResponse = await contract.balanceOf(account);
+                  const decimalsResponse = await contract.decimals(); // Assuming the token has a "decimals" function
 
-                if (balanceResponse && decimalsResponse) {
-                  const balance = uint256.uint256ToBN(balanceResponse).toString();
-                  const decimals = parseInt(decimalsResponse, 10); // Convert decimals to integer
-                  const adjustedBalance = (balance / 10 ** decimals).toFixed(5); // Adjust balance based on decimals
-                  newBalances[token] = adjustedBalance;
-                } else {
-                  console.warn(`Balance or decimals undefined for ${token}`);
-                  newBalances[token] = "0"; // Or handle it differently
+                  if (balanceResponse && decimalsResponse) {
+                    const balance = uint256.uint256ToBN(balanceResponse).toString();
+                    const decimals = parseInt(decimalsResponse, 10); // Convert decimals to integer
+                    const adjustedBalance = (balance / 10 ** decimals).toFixed(5); // Adjust balance based on decimals
+                    newBalances[token] = adjustedBalance;
+                  } else {
+                    console.warn(`Balance or decimals undefined for ${token}`);
+                    newBalances[token] = 0; // Or handle it differently
+                  }
+                } catch (err) {
+                  console.error(`Error fetching balance for ${token}:`, err);
+                  setError(err.message);
                 }
-              } catch (err) {
-                console.error(`Error fetching balance for ${token}:`, err);
-                setError(err.message);
               }
+            } catch (err) {
+              console.error("Error fetching balances:", err);
+              setError(err.message);
+            } finally {
+              setIsLoading(false); 
             }
-            setBalances(newBalances);
+            // filter token with zero balance 
+            const filteredBalances = Object.fromEntries(
+              Object.entries(newBalances).filter(([token, balance]) => balance !== 0)
+            );
+            // get price of these tokens from filteredBalances 
+            // filteredBalances ex : {ETH: '0.00211', USDC: '9.00000', TWC: '2232.42801'}
+            // to have {token, price}
+            let filteredPrices = {};
+            for (const token in filteredBalances) {
+              filteredPrices[token] = tokenPrices[token];
+            }
+            // mix filteredBalances and filteredPrices to have : 
+            // an array of {"token": token, "balance": balance, "price": price, "total", balance*price}
+            let mixedBalances = [];
+            for (const token in filteredBalances) {
+              mixedBalances.push({ "token": token, "balance": filteredBalances[token], "price": filteredPrices[token], "total": filteredBalances[token]*filteredPrices[token] });
+            }
+            setBalances(mixedBalances);
+            // Calculate total wallet value
+            const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
+            setTotalWalletValue(totalWalletValue);
+
+
           }
         };
 
@@ -220,23 +264,38 @@ import React, { useState, useEffect } from "react";
           {account ? (
             <>
               <h2>Wallet Address: {account}</h2>
+              {isLoading ? ( 
+                <p>Loading balances...</p> 
+              ) : (
               <table>
                 <thead>
                   <tr>
                     <th className="table-header">Asset</th>
                     <th className="table-header">Quantity</th>
+                    <th className="table-header">Price</th>
+                    <th className="table-header">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(balances).map(([token, balance]) => (
-                    <tr key={token}>
-                      <td>{token}</td>
-                      <td>{balance}</td>
+                  {balances.map((item) => (
+                    <tr key={item.token}>
+                      <td>{item.token}</td>
+                      <td>{item.balance}</td>
+                      <td>{item.price.toFixed(5)}</td>
+                      <td>{item.total.toFixed(5)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              )}
 
+              {/* Conditionally display Total Wallet Value */}
+              {totalWalletValue > 0 && (
+                <p>Total Wallet Value: {totalWalletValue.toFixed(5)}</p>
+              )}
+              {/* display only if brianBalances is not empty */}
+              {balancesWithBrian && Object.keys(balancesWithBrian).length > 0 && ( 
+              <>
               <h3>Table by Brian AI</h3> {/* New table */}
               <table>
                 <thead>
@@ -254,6 +313,8 @@ import React, { useState, useEffect } from "react";
                   ))}
                 </tbody>
               </table>
+              </>
+              )}
             </>
           ) : (
             <button onClick={handleConnectWallet}>Connect Wallet</button>
