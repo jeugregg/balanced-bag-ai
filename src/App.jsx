@@ -3,7 +3,7 @@ import { Contract, WalletAccount, uint256, constants, RpcProvider } from "starkn
 import { connect } from '@starknet-io/get-starknet';
 import { BrianSDK } from "@brian-ai/sdk";
 
-const mode_debug = true;
+const mode_debug = false;
 
 
 // Replace with actual token contract addresses
@@ -15,19 +15,36 @@ const tokenAddresses_default = {
   WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac"
 };
 
-
+function findIndexBySymbol(data, symbol_search) {
+  for (let i = 0; i < data.length; i++) {
+    if (data[i].symbol === symbol_search) {
+      return i;
+    }
+  }
+  return -1; // Return -1 if symbol not found
+}
 
 async function getMarket() {
   const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', {
     method: 'GET',
     headers: {},
   });
+  // example : data[0] =
+  // {position: 1, name: 'Ethereum', symbol: 'ETH', address: '0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7', decimals: 18, …}
 
   const data = await response.json();
 
   // Check if data is valid JSON before storing
   if (typeof data === 'object') {
     try {
+      // patch "8"  
+      const index_8 = findIndexBySymbol(data, "\b8");
+      data[index_8].symbol = "8";
+      // patch "SCHIZODIO "
+      const index_SCHIZODIO = findIndexBySymbol(data, "SCHIZODIO ");
+      data[index_SCHIZODIO].symbol = "SCHIZODIO";
+      data[index_SCHIZODIO].name = "SCHIZODIO";
+
       localStorage.setItem('starknetTokens', JSON.stringify(data));
       console.log('Starknet tokens saved to localStorage.');
       return data;
@@ -107,8 +124,6 @@ function getMarketTokenMcap() {
   return tokenMcaps;
 }
 
-
-
 // Assuming brianBalances is an array of objects returned by the Brian API
 function extractBrianBalances(brianBalance) {
   if (!brianBalance || brianBalance.length === 0) {
@@ -181,6 +196,29 @@ function calculateEMA7HourlyAndMaxStdDev(prices) {
   return { ema, maxStdDev };
 }
 
+const reduceTokenList = (tokens) => {
+  // reduce list of tokens by removing ???
+  // TODO : make it better
+  const uniqueTokens = {};
+  for (const token of tokens) {
+    const symbol = token.symbol;
+    for (let i = 0; i <= symbol.length - 3; i++) {
+      const shortSymbol = symbol.slice(i, i + 3);
+      if (!uniqueTokens[shortSymbol] || symbol.length < uniqueTokens[shortSymbol].length) {
+        uniqueTokens[shortSymbol] = token;
+      }
+    }
+  }
+  const filteredTokens = Object.values(uniqueTokens);
+  const listReducedTokens = filteredTokens.map((token) => token.symbol);
+  return listReducedTokens;
+};
+
+function removeTokensWithSuffix(tokens, suffix) {
+  return tokens.filter(token => !token.endsWith(suffix) || token === suffix);
+}
+
+
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState(null);
@@ -203,6 +241,50 @@ function App() {
   console.log("Brian API Key:", brianApiKey);
   const brian = new BrianSDK(options);
 
+  const askReduceList = async () => {
+    // Ask BRIAN AI to reduce token list by excluded :
+    // - stable coins, 
+    // - liquid staking tokens,
+    // - and correletated coins
+    const tokens = loadTokens();
+    // transform tokens symbols in list of string with '' :
+    const symbols = tokens.map((token) => token.symbol);
+    let prompt = `From this list of assets on Starknet and particularly on app.avnu.fi : '${symbols.join("', '")}`;
+    prompt += "' extract a new list by removing stablecoins when you are sure that it is a stablecoin. Don't explain your answer, just write the new list"
+    const result = await brian.ask({
+      prompt: prompt,
+      kb: "public-knowledge-box",
+    });
+    console.log("result stablecoin: ")
+    console.log(result["answer"]);
+    prompt = "From this list of assets on Starknet and particularly on app.avnu.fi :"
+    prompt += result["answer"];
+    prompt += ", extract a new list by removing liquid staking tokens only when you are sure that it is a liquid staking token.";
+    prompt += " Don't explain your answer, just write the new list"
+    const result_lst = await brian.ask({
+      prompt: prompt,
+      kb: "public-knowledge-box",
+    });
+    console.log("result lst: ")
+    console.log(result_lst["answer"]);
+    // for each symbol of tokens, check if the symbol is into long string result
+    let listReducedTokens = [];
+    for (const symbol of symbols) {
+      if (result_lst["answer"].includes(`'${symbol}'`)) {
+        listReducedTokens.push(symbol);
+      }
+    }
+    console.log("listReducedTokens identified: ");
+    console.log(listReducedTokens);
+    // remove tokens with STRK suffix
+    listReducedTokens = removeTokensWithSuffix(listReducedTokens, "STRK");
+    console.log("listReducedTokens after STRK suffixes removed: ")
+    console.log(listReducedTokens);
+    // save in localstorage
+    localStorage.setItem('listReducedTokens', JSON.stringify(listReducedTokens));
+    return listReducedTokens;
+  }
+
   const handleSolutionSelect = (solution) => {
     setSelectedSolution(solution);
 
@@ -223,7 +305,7 @@ function App() {
         WBTC: 0.1 * amount,
       };
     } else if (solution === 'Balanced') {
-      // select 10 first Market Cap
+      // select first biggest Market Cap
       const tokenMcaps = getMarketTokenMcap();
       let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
       //sortedTokens = sortedTokens.slice(0, 10);
@@ -238,15 +320,13 @@ function App() {
           const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
           tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
           tokenMaxStdDev[token] = tokenEMA7HourlyAndMaxStdDev.maxStdDev;
-
-          // detect stable coin
+          // detect stable coin and excluded
           if (tokenMaxStdDev[token] < 2) {
             if (tokenPrices[token] < 1.07 && tokenPrices[token] > 0.93) {
               delete tokenEMA7Hourly[token];
               delete tokenMaxStdDev[token];
               sortedTokens = sortedTokens.filter(t => t !== token);
             }
-
           }
         } catch (error) {
           console.error(`Error calculating EMA and MaxStdDev for ${token}:`, error);
@@ -255,6 +335,22 @@ function App() {
         }
 
       }
+      // take only 10
+      sortedTokens = sortedTokens.slice(0, 10);
+      // calculate % distribution par assets
+      // take sqrt of EMA7Hourly
+      let tokenDistribution = {};
+      for (const token in tokenEMA7Hourly) {
+        tokenDistribution[token] = Math.sqrt(tokenEMA7Hourly[token]);
+      }
+      // calculate totalEma7Hourly
+      const totalEma7Hourly = Object.values(tokenEMA7Hourly).reduce((total, value) => total + value, 0);
+      // calculate % distribution par assets
+      for (const token in tokenEMA7Hourly) {
+        tokenDistribution[token] = tokenDistribution[token] / totalEma7Hourly;
+      }
+      console.log("tokenDistribution:");
+      console.log(tokenDistribution);
       console.log("tokenEMA7Hourly:")
       console.log(tokenEMA7Hourly)
       console.log("tokenMaxStdDev:")
@@ -314,17 +410,20 @@ function App() {
       console.log(account);
       setAccount(account);
       setMyWalletAccount(newWalletAccount);
-      if (mode_debug === true) {
-        const market = loadTokens();
-      } else {
+      // retrieve avnu market
+      if (mode_debug !== true) {
         const market = await getMarket();
+        if (market == null) {
+          setError("No price feed");
+        }
+        console.log("market:");
+        console.log(market);
       }
+      // get a reduced list without liquid staking tokens, correleted coins, or stable coins
+      const listReducedTokens = await askReduceList();
+      console.log("listReducedTokens:");
+      console.log(listReducedTokens);
 
-      if (market == null) {
-        setError("No price feed");
-      }
-      console.log("market:");
-      console.log(market);
     } catch (err) {
       console.error("Error connecting wallet:", err);
       setError(err.message);
