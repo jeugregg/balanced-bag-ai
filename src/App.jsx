@@ -39,11 +39,15 @@ async function getMarket() {
     try {
       // patch "8"  
       const index_8 = findIndexBySymbol(data, "\b8");
-      data[index_8].symbol = "8";
+      if (index_8 != -1) {
+        data[index_8].symbol = "8";
+      }
       // patch "SCHIZODIO "
       const index_SCHIZODIO = findIndexBySymbol(data, "SCHIZODIO ");
-      data[index_SCHIZODIO].symbol = "SCHIZODIO";
-      data[index_SCHIZODIO].name = "SCHIZODIO";
+      if (index_SCHIZODIO == -1) {
+        data[index_SCHIZODIO].symbol = "SCHIZODIO";
+        data[index_SCHIZODIO].name = "SCHIZODIO";
+      }
 
       localStorage.setItem('starknetTokens', JSON.stringify(data));
       console.log('Starknet tokens saved to localStorage.');
@@ -57,20 +61,23 @@ async function getMarket() {
   return null;
 }
 
-function getMarketTokenSymbol() {
-
+function getMarketTokenSymbol(tokens = null) {
   // get all token symbol 
   // tokens is a list of data like that : 
   // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
   //const tokenSymbols = tokens.map(token => token.symbol).filter(symbol => symbol != "\b8");
-  const tokens = loadTokens();
+  if (tokens === null) {
+    tokens = loadTokens();
+  }
   const tokenSymbols = tokens.map(token => token.symbol);
   return tokenSymbols;
 }
 
-function getMarketTokenAddress() {
+function getMarketTokenAddress(tokens = null) {
   // get all token address from localstorage
-  const tokens = loadTokens();
+  if (tokens === null) {
+    tokens = loadTokens();
+  }
   // get all token symbol 
   // tokens is a list of data like that : 
   // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
@@ -80,9 +87,11 @@ function getMarketTokenAddress() {
   return tokenAddresses;
 }
 
-function getMarketTokenPrice() {
+function getMarketTokenPrice(tokens = null) {
   // get all token price from localstorage
-  const tokens = loadTokens();
+  if (tokens === null) {
+    tokens = loadTokens();
+  }
   // get all token symbol 
   // tokens is a list of data like that : 
   // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
@@ -112,9 +121,11 @@ function loadTokens() {
   const tokens = JSON.parse(storedTokens);
   return tokens;
 }
-function getMarketTokenMcap() {
+function getMarketTokenMcap(tokens = null) {
   // get Market Cap from localstorage
-  const tokens = loadTokens();
+  if (tokens === null) {
+    tokens = loadTokens();
+  }
 
   const tokenMcaps = tokens.reduce((acc, token) => ({
     ...acc,
@@ -218,7 +229,28 @@ function removeTokensWithSuffix(tokens, suffix) {
   return tokens.filter(token => !token.endsWith(suffix) || token === suffix);
 }
 
+function filterTokens(tokens, listReducedTokensInput = null) {
+  // if listReducedTokensInput is not null, use it
+  if (listReducedTokensInput) {
+    const goodTokens = tokens.filter(token => {
+      return listReducedTokensInput.includes(token.symbol) && !listReducedTokensInput.some(reducedToken => token.symbol !== reducedToken && token.symbol.includes(reducedToken));
+    });
+    return goodTokens;
+  }
 
+  // if listReducedTokensInput is null, use localStorage
+  const listReducedTokensString = localStorage.getItem('listReducedTokens');
+  // if data in localStorage
+  if (listReducedTokensString) {
+    const listReducedTokens = JSON.parse(listReducedTokensString);
+    const goodTokens = tokens.filter(token => {
+      return listReducedTokens.includes(token.symbol) && !listReducedTokens.some(reducedToken => token.symbol !== reducedToken && token.symbol.includes(reducedToken));
+    });
+    return goodTokens;
+  }
+  // if no data in localStorage, return all tokens
+  return tokens;
+}
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState(null);
@@ -305,17 +337,25 @@ function App() {
         WBTC: 0.1 * amount,
       };
     } else if (solution === 'Balanced') {
+      // load tokens data
+      const tokensData = loadTokens();
+      // keep only good token 
+      const goodTokensData = filterTokens(tokensData);
+      console.log("filterTokens: ");
+      console.log(goodTokensData);
       // select first biggest Market Cap
-      const tokenMcaps = getMarketTokenMcap();
+      let tokenMcaps = getMarketTokenMcap(goodTokensData);
+      // sort by Market Cap
       let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
-      //sortedTokens = sortedTokens.slice(0, 10);
-      // calculate EMA7Hourly And MaxStdDev
-      const tokens = loadTokens();
-      const tokenPrices = getMarketTokenPrice();
+      // keep only 10th first
+      sortedTokens = sortedTokens.slice(0, 10);
+      let sortedTokensData = filterTokens(goodTokensData, sortedTokens);
+      // get token actual prices
+      const tokenPrices = getMarketTokenPrice(sortedTokensData);
       let tokenEMA7Hourly = {};
       let tokenMaxStdDev = {};
       for (const token of sortedTokens) {
-        const tokenPriceHistory = extractPrices(tokens, token);
+        const tokenPriceHistory = extractPrices(sortedTokensData, token);
         try {
           const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
           tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
@@ -335,19 +375,29 @@ function App() {
         }
 
       }
-      // take only 10
-      sortedTokens = sortedTokens.slice(0, 10);
-      // calculate % distribution par assets
+      sortedTokensData = filterTokens(sortedTokensData, sortedTokens)
+      console.log("sortedTokens:");
+      console.log(sortedTokens);
+      // calculate % distribution per assets
+      // approx: EMA7D(Mcap) = Mcap(Today) * EMA7D(Price) / Price(Today)
+      // approx alpha to have 3% for the last asset with smallest Mcap
+      const alpha = 0.75 * Math.log(0.03) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]))
       // take sqrt of EMA7Hourly
       let tokenDistribution = {};
       for (const token in tokenEMA7Hourly) {
-        tokenDistribution[token] = Math.sqrt(tokenEMA7Hourly[token]);
+        tokenDistribution[token] = Math.pow(tokenMcaps[token] * tokenEMA7Hourly[token] / tokenPrices[token], alpha);
       }
       // calculate totalEma7Hourly
-      const totalEma7Hourly = Object.values(tokenEMA7Hourly).reduce((total, value) => total + value, 0);
-      // calculate % distribution par assets
+      const totalDistribution = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
+      // calculate % distribution per assets
       for (const token in tokenEMA7Hourly) {
-        tokenDistribution[token] = tokenDistribution[token] / totalEma7Hourly;
+        tokenDistribution[token] = tokenDistribution[token] / totalDistribution;
+      }
+
+      // check sum of tokenDistribution == 1 
+      const sum = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
+      if (sum < 1.0001 && sum > 0.9999) {
+        console.error("Sum of tokenDistribution is not 1");
       }
       console.log("tokenDistribution:");
       console.log(tokenDistribution);
@@ -355,6 +405,7 @@ function App() {
       console.log(tokenEMA7Hourly)
       console.log("tokenMaxStdDev:")
       console.log(tokenMaxStdDev)
+
 
       return {
         ETH: 0.5 * amount,
