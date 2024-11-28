@@ -15,6 +15,8 @@ const tokenAddresses_default = {
   WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac"
 };
 
+const ethAmountToKeep = 2;
+
 function findIndexBySymbol(data, symbol_search) {
   for (let i = 0; i < data.length; i++) {
     if (data[i].symbol === symbol_search) {
@@ -263,6 +265,7 @@ function App() {
   const [investmentAmount, setInvestmentAmount] = useState("");
   const [selectedSolution, setSelectedSolution] = useState('Balanced'); // Set 'Balanced' as default
   const [investmentBreakdown, setInvestmentBreakdown] = useState(null);
+  const [showSwapSection, setShowSwapSection] = useState(false);
 
   // Access the API key from environment variables
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -396,22 +399,42 @@ function App() {
 
       // check sum of tokenDistribution == 1 
       const sum = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
-      if (sum < 1.0001 && sum > 0.9999) {
+      if (sum < 1.001 && sum > 0.999) {
+        console.log("sum: " + sum);
         console.error("Sum of tokenDistribution is not 1");
+
       }
       console.log("tokenDistribution:");
       console.log(tokenDistribution);
-      console.log("tokenEMA7Hourly:")
-      console.log(tokenEMA7Hourly)
-      console.log("tokenMaxStdDev:")
-      console.log(tokenMaxStdDev)
+      console.log("tokenEMA7Hourly:");
+      console.log(tokenEMA7Hourly);
+      console.log("tokenMaxStdDev:");
+      console.log(tokenMaxStdDev);
+
+      // Create investment breakdown based on tokenDistribution
+      let breakdown = {};
+      //let ethAmountToKeep = 2; // Keep $2 worth of ETH
+      let ethPrice = getMarketTokenPrice()['ETH'];
+      let ethAmountToKeepInEth = ethAmountToKeep / ethPrice;
+
+      for (const token in tokenDistribution) {
+        if (token === 'ETH') {
+          let maxEthToInvest = balances.find(item => item.token === 'ETH')?.balance - ethAmountToKeepInEth;
+          let ethToInvest = Math.min(tokenDistribution[token] * amount / ethPrice, maxEthToInvest);
+          breakdown[token] = {
+            amount: ethToInvest * ethPrice,
+            percentage: (ethToInvest * ethPrice / amount) * 100
+          };
+        } else {
+          breakdown[token] = {
+            amount: tokenDistribution[token] * amount,
+            percentage: tokenDistribution[token] * 100
+          };
+        }
+      }
+      return breakdown;
 
 
-      return {
-        ETH: 0.5 * amount,
-        USDC: 0.3 * amount,
-        STRK: 0.2 * amount,
-      };
     } else if (solution === 'Offensive') {
       return {
         STRK: 0.7 * amount,
@@ -432,8 +455,8 @@ function App() {
     } else {
       // If it's a number, ensure it doesn't exceed the total wallet value
       const amount = parseFloat(inputValue);
-      if (amount > totalWalletValue) {
-        inputValue = totalWalletValue.toFixed(5);
+      if (amount > totalWalletValue - ethAmountToKeep) {
+        inputValue = totalWalletValue.toFixed(5) - ethAmountToKeep.toFixed(5);
       }
     }
 
@@ -441,7 +464,8 @@ function App() {
   };
 
   const handlePercentageSelect = (percentage) => {
-    const amount = (totalWalletValue * (percentage / 100)).toFixed(5);
+    let maxAmountToInvest = totalWalletValue - ethAmountToKeep;
+    let amount = Math.min(totalWalletValue * (percentage / 100), maxAmountToInvest).toFixed(5);
     setInvestmentAmount(amount);
   };
   const handleConnectWallet = async () => {
@@ -479,6 +503,13 @@ function App() {
       console.error("Error connecting wallet:", err);
       setError(err.message);
     }
+  };
+
+  const handleSwapPrepare = () => {
+    // Add your logic here to prepare the swap transactions
+    // This might involve calculating the swap amounts, routes, etc.
+    // For now, we'll just display a message
+    alert("Swap preparation logic will be added here!");
   };
 
   useEffect(() => {
@@ -551,7 +582,7 @@ function App() {
         // Calculate total wallet value
         const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
         setTotalWalletValue(totalWalletValue);
-        setInvestmentAmount(totalWalletValue.toFixed(5));
+        setInvestmentAmount(totalWalletValue.toFixed(5) - ethAmountToKeep);
 
       }
     };
@@ -695,14 +726,29 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(investmentBreakdown).map(([token, amount]) => (
+                  {Object.entries(investmentBreakdown).map(([token, data]) => (
                     <tr key={token}>
                       <td>{token}</td>
-                      <td>{amount.toFixed(2)}</td>
+                      <td>{data.amount.toFixed(2)}</td>
+                      <td>{data.percentage.toFixed(2)}%</td> {/* New column */}
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              {/* New: Swap Section (conditionally displayed) */}
+              {showSwapSection && (
+                <>
+                  <h3>3- Swap to Invest</h3>
+                  <button onClick={handleSwapPrepare}>Validate and Prepare Swap</button>
+                </>
+              )}
+
+              {/* New: Button to show/hide Swap Section */}
+              <button onClick={() => setShowSwapSection(!showSwapSection)}>
+                {showSwapSection ? "Hide Swap Section" : "Show Swap Section"}
+              </button>
+
             </>
           )}
 
