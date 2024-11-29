@@ -311,7 +311,7 @@ function calculateCryptoSwap(deltaTransactions) {
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState(null);
-  const [account, setAccount] = useState(null);
+  const [walletAddress, setWalletAddress] = useState(null);
   const [walletBalances, setWalletBalances] = useState({});
   const [balances, setBalances] = useState({});
   const [balancesWithBrian, setBalancesWithBrian] = useState(null);
@@ -545,9 +545,9 @@ function App() {
       //const bl = await myWalletAccount.getBlockNumber();
       //console.log("block n°:" + bl);
       console.log("address:");
-      const account = newWalletAccount.address;
-      console.log(account);
-      setAccount(account);
+      const walletAddress = newWalletAccount.address;
+      console.log(walletAddress);
+      setWalletAddress(walletAddress);
       setMyWalletAccount(newWalletAccount);
       // retrieve avnu market
       if (mode_debug !== true) {
@@ -597,7 +597,7 @@ function App() {
 
   useEffect(() => {
     const fetchBalances = async () => {
-      if (account && myWalletAccount) {
+      if (walletAddress && myWalletAccount) {
         let newBalances = {};
         //const provider = new RpcProvider({ nodeUrl: constants.NetworkName.SN_MAIN }); // Create RpcProvider
         const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno", headers: { 'x-apikey': rcpApiKey } }); // Create RpcProvider
@@ -611,7 +611,7 @@ function App() {
               const contract = new Contract(abi, tokenAddresses[token], myWalletAccount);
 
               // Fetch balance and decimals
-              const balanceResponse = await contract.balanceOf(account);
+              const balanceResponse = await contract.balanceOf(walletAddress);
               const decimalsResponse = await contract.decimals(); // Assuming the token has a "decimals" function
 
               if (balanceResponse && decimalsResponse) {
@@ -671,7 +671,7 @@ function App() {
 
     // fetch balance with brian api
     const fetchBalancesWithBrian = async () => {
-      if (account && myWalletAccount) {
+      if (walletAddress && myWalletAccount) {
         const tokenSymbols = getMarketTokenSymbol();
         console.log("tokenSymbols:");
         console.log(tokenSymbols);
@@ -685,7 +685,7 @@ function App() {
 
         const brianBalances = await brian.transact({
           prompt: str_prompt_tokens,
-          "address": account
+          "address": walletAddress
         });
 
         const newBrianBalances = extractAllBrianBalances(brianBalances);
@@ -697,7 +697,7 @@ function App() {
 
     fetchBalances();
     //fetchBalancesWithBrian();
-  }, [account, myWalletAccount]);
+  }, [walletAddress, myWalletAccount]);
 
   return (
     <div>
@@ -705,9 +705,9 @@ function App() {
       <h2>Welcome to Automatic Balanced Bag by AI</h2>
       <h3>1- Select amount to invest</h3>
       {error && <div style={{ color: "red" }}>{error}</div>}
-      {account ? (
+      {walletAddress ? (
         <>
-          <h4>Wallet Address: {account}</h4>
+          <h4>Wallet Address: {walletAddress}</h4>
           {isLoading ? (
             <p>Loading balances...</p>
           ) : (
