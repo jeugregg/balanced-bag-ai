@@ -538,7 +538,13 @@ function App() {
       const selectedWalletSWO = await connect({ modalMode: "alwaysAsk", modalTheme: "light" });
       console.log("selectedWalletSWO:");
       console.log(selectedWalletSWO);
-      const newWalletAccount = new WalletAccount({ nodeUrl: constants.NetworkName.SN_MAIN }, selectedWalletSWO);
+      const newWalletAccount = new WalletAccount(
+        {
+          nodeUrl: "https://rpc.nethermind.io/mainnet-juno",
+          headers: { 'x-apikey': rcpApiKey }
+        },
+        selectedWalletSWO
+      );
       await newWalletAccount.requestAccounts();
       console.log("myWalletAccount:");
       console.log(newWalletAccount);
@@ -584,6 +590,13 @@ function App() {
 
     setSwapsToPrepare(swaps);
   };
+
+  useEffect(() => {
+    // Call handleSwapPrepare whenever investmentBreakdown changes and is not null
+    if (investmentBreakdown) {
+      handleSwapPrepare();
+    }
+  }, [investmentBreakdown]);
 
   useEffect(() => {
     // Update investment breakdown whenever investmentAmount changes
@@ -666,6 +679,7 @@ function App() {
         const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
         setTotalWalletValue(totalWalletValue);
         setInvestmentAmount(totalWalletValue.toFixed(5));
+
       }
     };
 
@@ -818,35 +832,34 @@ function App() {
                 </tbody>
               </table>
 
-              {/* New: Swap Section (conditionally displayed) */}
-              {showSwapSection && (
-                <>
-                  <h3>3- Swap to Invest</h3>
+              {/* New: Swap Section always displayed if investmentBreakdown exists */}
+              <>
+                <h3>3- Swap to Invest</h3>
 
-                  {/* New: Swap Preparation Table */}
-                  <h4>Swaps to Prepare:</h4>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th className="table-header">Sell Token</th>
-                        <th className="table-header">Buy Token</th>
-                        <th className="table-header">Amount ($)</th>
+                {/* New: Swap Preparation Table */}
+                <h4>Swaps to Prepare:</h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th className="table-header">Sell Token</th>
+                      <th className="table-header">Buy Token</th>
+                      <th className="table-header">Amount ($)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {swapsToPrepare.map((swap, index) => (
+                      <tr key={index}>
+                        <td>{swap.sell}</td>
+                        <td>{swap.buy}</td>
+                        <td>{swap.amount.toFixed(2)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {swapsToPrepare.map((swap, index) => (
-                        <tr key={index}>
-                          <td>{swap.sell}</td>
-                          <td>{swap.buy}</td>
-                          <td>{swap.amount.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                    ))}
+                  </tbody>
+                </table>
 
-                  <button onClick={handleSwapPrepare}>Validate and Prepare Swap</button>
-                </>
-              )}
+                <button onClick={handleSwapPrepare}>Validate and Prepare Swap</button>
+              </>
+
 
               {/* New: Button to show/hide Swap Section */}
               <button onClick={() => setShowSwapSection(!showSwapSection)}>
