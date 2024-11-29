@@ -254,20 +254,60 @@ function filterTokens(tokens, listReducedTokensInput = null) {
   return tokens;
 }
 
-function calculateCryptoSwap(currentWallet, targetWallet) {
-  const swapTransactions = {};
+function calculateCryptoDelta(currentWallet, targetWallet) {
+  const deltaTransactions = {};
 
-  // Iterate through the target wallet to determine buy/sell amounts
-  for (const token in targetWallet) {
-    const targetAmount = targetWallet[token];
-    const currentAmount = currentWallet[token] || 0; // Assume 0 if token not in current wallet
+  // Create a unique list of tokens (no duplicates)
+  const allTokens = new Set([...Object.keys(currentWallet), ...Object.keys(targetWallet)]);
+
+  for (const token of allTokens) {
+    const targetAmount = targetWallet[token] || 0;
+    const currentAmount = currentWallet[token] || 0;
 
     const difference = targetAmount - currentAmount;
-    swapTransactions[token] = difference;
+    deltaTransactions[token] = difference;
   }
 
-  return swapTransactions;
+  return deltaTransactions;
 }
+
+function calculateCryptoSwap(deltaTransactions) {
+  // with deltaTransactions, create a swaps array with token sell, token buy, amount
+  // loop if all deltaTransactions is not zero 
+  // use deltaTransactions to take the lowest and the highest amount 
+  // create a swap entry : buy, sell, amount
+  const swaps = [];
+
+  // Convert deltaTransactions to an array for easier sorting
+  const deltaArray = Object.entries(deltaTransactions).map(([token, amount]) => ({ token, amount }));
+
+  while (deltaArray.some(({ amount }) => amount !== 0)) {
+    // Sort by absolute amount to find biggest sell and buy
+    deltaArray.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+
+    const biggestSell = deltaArray.find(({ amount }) => amount < 0);
+    const biggestBuy = deltaArray.find(({ amount }) => amount > 0);
+
+    if (!biggestSell || !biggestBuy) {
+      // This shouldn't happen if the sum of deltas is 0, but it's a safety check
+      break;
+    }
+
+    const swapAmount = Math.min(Math.abs(biggestSell.amount), biggestBuy.amount);
+
+    swaps.push({
+      sell: biggestSell.token,
+      buy: biggestBuy.token,
+      amount: swapAmount,
+    });
+
+    biggestSell.amount += swapAmount;
+    biggestBuy.amount -= swapAmount;
+  }
+
+  return swaps;
+}
+
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState(null);
@@ -538,22 +578,11 @@ function App() {
     }
 
     // Calculate the swaps needed using the new function
-    const swapAmounts = calculateCryptoSwap(currentWallet, targetWallet);
-
+    const swapAmounts = calculateCryptoDelta(currentWallet, targetWallet);
     // Generate the list of swaps to prepare based on swapAmounts
-    let newSwaps = [];
-    for (const token in swapAmounts) {
-      if (swapAmounts[token] > 0) { // Only create swaps for tokens that need to be bought
-        newSwaps.push({
-          sellToken: 'ETH', // Assuming ETH is the source token for all swaps
-          buyToken: token,
-          sellAmount: null, // To be calculated or input by the user
-          buyAmount: swapAmounts[token] // Use the calculated buy amount 
-        });
-      }
-    }
+    const swaps = calculateCryptoSwap(swapAmounts);
 
-    setSwapsToPrepare(newSwaps);
+    setSwapsToPrepare(swaps);
   };
 
   useEffect(() => {
@@ -801,21 +830,15 @@ function App() {
                       <tr>
                         <th className="table-header">Sell Token</th>
                         <th className="table-header">Buy Token</th>
-                        <th className="table-header">Sell Amount</th>
-                        <th className="table-header">Buy Amount</th>
+                        <th className="table-header">Amount ($)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {swapsToPrepare.map((swap, index) => (
                         <tr key={index}>
-                          <td>{swap.sellToken}</td>
-                          <td>{swap.buyToken}</td>
-                          <td>
-                            {/* You can add input fields here to let the user 
-              specify sell amounts if needed */}
-                            {swap.sellAmount || '-'}
-                          </td>
-                          <td>{swap.buyAmount.toFixed(2)}</td>
+                          <td>{swap.sell}</td>
+                          <td>{swap.buy}</td>
+                          <td>{swap.amount.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
