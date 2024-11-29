@@ -330,7 +330,7 @@ function App() {
   const options = {
     apiKey: brianApiKey,
   };
-  console.log("Brian API Key:", brianApiKey);
+
   const brian = new BrianSDK(options);
 
   const askReduceList = async () => {
@@ -589,6 +589,58 @@ function App() {
     const swaps = calculateCryptoSwap(swapAmounts);
 
     setSwapsToPrepare(swaps);
+  };
+
+  const handlePrepareSwapTransactions = async () => {
+
+    let steps = [];
+    for (const swap of swapsToPrepare) {
+      const prompt = `Swap $${swap.amount.toFixed(2)} worth of '${swap.sell}' to '${swap.buy}' on Starknet`;
+      console.log(`Sending prompt to Brian: ${prompt}`);
+
+      try {
+        const brianResponse = await brian.transact({
+          prompt: prompt,
+          address: walletAddress, // Assuming walletAddress is available
+        });
+
+        // Handle Brian's response - you might need to parse or validate it
+        console.log("Brian's Response:", brianResponse);
+        // Check Brian's extractedParams
+        const extractedParams = brianResponse[0]["extractedParams"];
+        if (
+          extractedParams &&
+          extractedParams.action === "swap" &&
+          extractedParams.chain === "Starknet" &&
+          extractedParams.token1 === swap.sell && // Make sure tokens match
+          extractedParams.token2 === swap.buy   // Make sure tokens match
+        ) {
+          console.log("Swap successfully prepared:", extractedParams);
+          // brianResponse[0]["data"]["steps"] to add steps
+          steps = steps.concat(brianResponse[0]["data"]["steps"]);
+
+          // ... (you can add further logic here, e.g., update UI) ...
+        } else {
+          console.error("Unexpected response from Brian:", extractedParams);
+          setError("Unexpected response from Brian. Please check the console.");
+        }
+
+      } catch (error) {
+        console.error(`Error preparing swap for ${swap.sell} to ${swap.buy}:`, error);
+        setError(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
+      }
+    }
+
+    console.log("steps:");
+    console.log(steps);
+    console.log("Tx execution... ");
+    const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps.slice(0, 2));
+    //const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps);
+    await provider.waitForTransaction(transferTxHash);
+    console.log("transaction_hash:");
+    console.log(transferTxHash);
+    console.log("End Tx execution.");
+
   };
 
   useEffect(() => {
@@ -857,14 +909,12 @@ function App() {
                   </tbody>
                 </table>
 
-                <button onClick={handleSwapPrepare}>Validate and Prepare Swap</button>
+                <button onClick={handlePrepareSwapTransactions}>Validate and Swap</button>
               </>
 
 
-              {/* New: Button to show/hide Swap Section */}
-              <button onClick={() => setShowSwapSection(!showSwapSection)}>
-                {showSwapSection ? "Hide Swap Section" : "Show Swap Section"}
-              </button>
+
+
 
             </>
           )}
