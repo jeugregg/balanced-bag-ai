@@ -254,9 +254,25 @@ function filterTokens(tokens, listReducedTokensInput = null) {
   return tokens;
 }
 
+function calculateCryptoSwap(currentWallet, targetWallet) {
+  const swapTransactions = {};
+
+  // Iterate through the target wallet to determine buy/sell amounts
+  for (const token in targetWallet) {
+    const targetAmount = targetWallet[token];
+    const currentAmount = currentWallet[token] || 0; // Assume 0 if token not in current wallet
+
+    const difference = targetAmount - currentAmount;
+    swapTransactions[token] = difference;
+  }
+
+  return swapTransactions;
+}
+
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState(null);
   const [account, setAccount] = useState(null);
+  const [walletBalances, setWalletBalances] = useState({});
   const [balances, setBalances] = useState({});
   const [balancesWithBrian, setBalancesWithBrian] = useState(null);
   const [error, setError] = useState(null);
@@ -266,6 +282,7 @@ function App() {
   const [selectedSolution, setSelectedSolution] = useState('Balanced'); // Set 'Balanced' as default
   const [investmentBreakdown, setInvestmentBreakdown] = useState(null);
   const [showSwapSection, setShowSwapSection] = useState(false);
+  const [swapsToPrepare, setSwapsToPrepare] = useState([]);
 
   // Access the API key from environment variables
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -414,26 +431,25 @@ function App() {
       // Create investment breakdown based on tokenDistribution
       let breakdown = {};
       //let ethAmountToKeep = 2; // Keep $2 worth of ETH
-      let ethPrice = getMarketTokenPrice()['ETH'];
-      let ethAmountToKeepInEth = ethAmountToKeep / ethPrice;
+      //let ethPrice = getMarketTokenPrice()['ETH'];
+      //let ethAmountToKeepInEth = ethAmountToKeep / ethPrice;
 
       for (const token in tokenDistribution) {
-        if (token === 'ETH') {
-          let maxEthToInvest = balances.find(item => item.token === 'ETH')?.balance - ethAmountToKeepInEth;
-          let ethToInvest = Math.min(tokenDistribution[token] * amount / ethPrice, maxEthToInvest);
-          breakdown[token] = {
-            amount: ethToInvest * ethPrice,
-            percentage: (ethToInvest * ethPrice / amount) * 100
-          };
-        } else {
-          breakdown[token] = {
-            amount: tokenDistribution[token] * amount,
-            percentage: tokenDistribution[token] * 100
-          };
-        }
+        //if (token === 'ETH') {
+        //
+        //let maxEthToInvest = balances.find(item => item.token === 'ETH')?.balance - ethAmountToKeepInEth;
+        //let ethToInvest = Math.min(tokenDistribution[token] * amount / ethPrice, maxEthToInvest);
+        //breakdown[token] = {
+        //  amount: ethToInvest * ethPrice,
+        //  percentage: (ethToInvest * ethPrice / amount) * 100
+        //};
+        //} else {
+        breakdown[token] = {
+          amount: tokenDistribution[token] * amount,
+          percentage: tokenDistribution[token] * 100
+        };
       }
       return breakdown;
-
 
     } else if (solution === 'Offensive') {
       return {
@@ -455,8 +471,8 @@ function App() {
     } else {
       // If it's a number, ensure it doesn't exceed the total wallet value
       const amount = parseFloat(inputValue);
-      if (amount > totalWalletValue - ethAmountToKeep) {
-        inputValue = totalWalletValue.toFixed(5) - ethAmountToKeep.toFixed(5);
+      if (amount > totalWalletValue - 0) {
+        inputValue = totalWalletValue.toFixed(5) - 0;
       }
     }
 
@@ -464,9 +480,17 @@ function App() {
   };
 
   const handlePercentageSelect = (percentage) => {
-    let maxAmountToInvest = totalWalletValue - ethAmountToKeep;
+    let maxAmountToInvest = totalWalletValue - 0;
     let amount = Math.min(totalWalletValue * (percentage / 100), maxAmountToInvest).toFixed(5);
     setInvestmentAmount(amount);
+    // update balances with same percentage
+    // Update balances proportionally based on the percentage
+    const newBalances = walletBalances.map(item => ({
+      ...item,
+      balance: (item.balance / totalWalletValue) * amount, // Adjust balance proportionally
+      total: (item.total / totalWalletValue) * amount   // Adjust total proportionally
+    }));
+    setBalances(newBalances);
   };
   const handleConnectWallet = async () => {
     try {
@@ -506,10 +530,30 @@ function App() {
   };
 
   const handleSwapPrepare = () => {
-    // Add your logic here to prepare the swap transactions
-    // This might involve calculating the swap amounts, routes, etc.
-    // For now, we'll just display a message
-    alert("Swap preparation logic will be added here!");
+    // Create currentWallet and targetWallet objects for calculateCryptoSwap
+    const currentWallet = balances.reduce((acc, item) => ({ ...acc, [item.token]: parseFloat(item.total) }), {});
+    const targetWallet = {};
+    for (const token in investmentBreakdown) {
+      targetWallet[token] = parseFloat(investmentBreakdown[token].amount);
+    }
+
+    // Calculate the swaps needed using the new function
+    const swapAmounts = calculateCryptoSwap(currentWallet, targetWallet);
+
+    // Generate the list of swaps to prepare based on swapAmounts
+    let newSwaps = [];
+    for (const token in swapAmounts) {
+      if (swapAmounts[token] > 0) { // Only create swaps for tokens that need to be bought
+        newSwaps.push({
+          sellToken: 'ETH', // Assuming ETH is the source token for all swaps
+          buyToken: token,
+          sellAmount: null, // To be calculated or input by the user
+          buyAmount: swapAmounts[token] // Use the calculated buy amount 
+        });
+      }
+    }
+
+    setSwapsToPrepare(newSwaps);
   };
 
   useEffect(() => {
@@ -578,12 +622,21 @@ function App() {
         for (const token in filteredBalances) {
           mixedBalances.push({ "token": token, "balance": filteredBalances[token], "price": filteredPrices[token], "total": filteredBalances[token] * filteredPrices[token] });
         }
+        setWalletBalances(mixedBalances);
+        // for ETH balance, keep ethAmountToKeep $ worth of ETH
+        for (const token in mixedBalances) {
+          if (mixedBalances[token].token === "ETH") {
+            // keep ethAmountToKeep $ worth of ETH in mixedBalances
+            mixedBalances[token].balance -= ethAmountToKeep / mixedBalances[token].price;
+            mixedBalances[token].total -= ethAmountToKeep;
+          }
+        }
+        // Set investment amount
         setBalances(mixedBalances);
         // Calculate total wallet value
         const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
         setTotalWalletValue(totalWalletValue);
-        setInvestmentAmount(totalWalletValue.toFixed(5) - ethAmountToKeep);
-
+        setInvestmentAmount(totalWalletValue.toFixed(5));
       }
     };
 
@@ -740,6 +793,34 @@ function App() {
               {showSwapSection && (
                 <>
                   <h3>3- Swap to Invest</h3>
+
+                  {/* New: Swap Preparation Table */}
+                  <h4>Swaps to Prepare:</h4>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th className="table-header">Sell Token</th>
+                        <th className="table-header">Buy Token</th>
+                        <th className="table-header">Sell Amount</th>
+                        <th className="table-header">Buy Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {swapsToPrepare.map((swap, index) => (
+                        <tr key={index}>
+                          <td>{swap.sellToken}</td>
+                          <td>{swap.buyToken}</td>
+                          <td>
+                            {/* You can add input fields here to let the user 
+              specify sell amounts if needed */}
+                            {swap.sellAmount || '-'}
+                          </td>
+                          <td>{swap.buyAmount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
                   <button onClick={handleSwapPrepare}>Validate and Prepare Swap</button>
                 </>
               )}
