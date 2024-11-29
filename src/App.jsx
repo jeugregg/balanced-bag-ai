@@ -634,9 +634,9 @@ function App() {
     console.log("steps:");
     console.log(steps);
     console.log("Tx execution... ");
-    const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps.slice(0, 2));
+    const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps.slice(0, 1));
     //const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps);
-    await provider.waitForTransaction(transferTxHash);
+    await myWalletAccount.waitForTransaction(transferTxHash);
     console.log("transaction_hash:");
     console.log(transferTxHash);
     console.log("End Tx execution.");
