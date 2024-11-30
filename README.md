@@ -6,7 +6,9 @@ This web app is a portfolio manager on the StarkNet blockchain ([StarkNet websit
 
 To be effective, you need to execute it every weeks or months.
 
-Demo live here : [https://balanced-bag-ai.netlify.app/](https://balanced-bag-ai.netlify.app/)
+Web App link : [https://balanced-bag-ai.netlify.app/](https://balanced-bag-ai.netlify.app/)
+
+Video demo link : [https://youtu.be/xfpcEbP8ETc](https://youtu.be/xfpcEbP8ETc)  
 
 **Features:**
 
