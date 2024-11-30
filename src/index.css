@@ -15,8 +15,3 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
 }
-
-th.table-header {
-  background-color: #FFCC99;
-  /* Corrected color */
-}
