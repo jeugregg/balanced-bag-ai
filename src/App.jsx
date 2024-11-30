@@ -776,8 +776,8 @@ function App() {
 
   return (
     <div>
-      <h1>StarkNet Portfolio Wallet</h1>
-      <h2>Welcome to Automatic Balanced Bag by AI</h2>
+      <h1>StarkNet Portfolio Wallet - Automatic Balanced Bag</h1>
+      <h2>Beta Version - 0.0.1</h2>
       <h3>1- Select amount to invest</h3>
       {error && <div style={{ color: "red" }}>{error}</div>}
       {walletAddress ? (
