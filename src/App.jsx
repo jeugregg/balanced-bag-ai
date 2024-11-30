@@ -932,7 +932,7 @@ function App() {
       <header className="app-header">
         <h1>Automatic Balanced Bag by AI</h1>
         <p>
-          Rebalance your StarkNet portfolio using AI-powered strategies.
+          Rebalance your <a href="https://starkware.co/starknet/" target="_blank" rel="noopener noreferrer">StarkNet</a> portfolio using AI-powered strategies.
           Powered by <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">AVNU Finance</a> and{' '}
           <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">Brian AI Agent</a>.
         </p>
