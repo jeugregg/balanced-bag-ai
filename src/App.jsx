@@ -4,7 +4,7 @@ import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
 import { connect } from '@starknet-io/get-starknet';
 import { BrianSDK } from "@brian-ai/sdk";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-solid-svg-icons';
+import { faCheck, faTimes, faSpinner, faHandSpock, faSyncAlt } from '@fortawesome/free-solid-svg-icons';
 
 const mode_debug = false;
 
@@ -197,7 +197,7 @@ function extractAllBrianBalances(brianBalances) {
 function calculateEMA7HourlyAndMaxStdDev(prices) {
   let length = prices.length;
   if (length < 168) {
-    if (length < 3) {
+    if (length < 2) {
       throw new Error("EMA7 need more longer prices history");
     }
   }
@@ -313,7 +313,7 @@ function calculateCryptoSwap(deltaTransactions) {
     swaps.push({
       sell: biggestSell.token,
       buy: biggestBuy.token,
-      amount: swapAmount,
+      amount: Math.max(0, swapAmount - 0.1),
     });
 
     biggestSell.amount += swapAmount;
@@ -610,6 +610,33 @@ function App() {
     setBalances({});
     setIsLoading(true); // Optionally set isLoading to true while balances are cleared
   };
+  const handleReloadBalances = async () => {
+    setIsLoading(true);
+    setInvestmentBreakdown(null);
+    setSelectedSolution('Balanced');
+    setSwapsToPrepare([]);
+    setTransactionsCompleted(false);
+    setSwapStatuses([]);
+    setWalletBalances({}); // Clear wallet balances
+    setBalances({});        // Clear balances
+
+    if (mode_debug !== true) {
+      const market = await getMarket();
+      if (market === null) {
+        setErrorWithTimeout("No price feed");
+      }
+      console.log("market:", market);
+    }
+
+    const listReducedTokens = await askReduceList();
+    console.log("listReducedTokens:", listReducedTokens);
+
+    // After clearing, immediately start fetching new balances
+    if (walletAddress && myWalletAccount) {
+      await fetchBalances();
+    }
+  };
+
 
   const handleSwapPrepare = () => {
     // Create currentWallet and targetWallet objects for calculateCryptoSwap
@@ -695,13 +722,87 @@ function App() {
     setTransactionsCompleted(allTransactionsSuccessful);
   };
 
+  const fetchBalances = async () => {
+    if (walletAddress && myWalletAccount) {
+      let newBalances = {};
+      //const provider = new RpcProvider({ nodeUrl: constants.NetworkName.SN_MAIN }); // Create RpcProvider
+      const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno", headers: { 'x-apikey': rcpApiKey } }); // Create RpcProvider
+      const tokenAddresses = getMarketTokenAddress();
+      const tokenPrices = getMarketTokenPrice();
+      try {
+        for (const token in tokenAddresses) {
+          try {
+            console.log(tokenAddresses[token]);
+            const { abi: abi } = await provider.getClassAt(tokenAddresses[token]); // Fetch ABI using class hash
+            const contract = new Contract(abi, tokenAddresses[token], myWalletAccount);
+
+            // Fetch balance and decimals
+            const balanceResponse = await contract.balanceOf(walletAddress);
+            const decimalsResponse = await contract.decimals(); // Assuming the token has a "decimals" function
+
+            if (balanceResponse && decimalsResponse) {
+              const balance = uint256.uint256ToBN(balanceResponse).toString();
+              const decimals = parseInt(decimalsResponse, 10); // Convert decimals to integer
+              const adjustedBalance = (balance / 10 ** decimals).toFixed(5); // Adjust balance based on decimals
+              newBalances[token] = adjustedBalance;
+            } else {
+              console.warn(`Balance or decimals undefined for ${token}`);
+              newBalances[token] = 0; // Or handle it differently
+            }
+          } catch (err) {
+            console.error(`Error fetching balance for ${token}:`, err);
+            setErrorWithTimeout(err.message);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching balances:", err);
+        setErrorWithTimeout(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+      // filter token with zero balance 
+      const filteredBalances = Object.fromEntries(
+        Object.entries(newBalances).filter(([token, balance]) => balance !== 0)
+      );
+      // get price of these tokens from filteredBalances 
+      // filteredBalances ex : {ETH: '0.00211', USDC: '9.00000', TWC: '2232.42801'}
+      // to have {token, price}
+      let filteredPrices = {};
+      for (const token in filteredBalances) {
+        filteredPrices[token] = tokenPrices[token];
+      }
+      // mix filteredBalances and filteredPrices to have : 
+      // an array of {"token": token, "balance": balance, "price": price, "total", balance*price}
+      let mixedBalances = [];
+      for (const token in filteredBalances) {
+        mixedBalances.push({ "token": token, "balance": filteredBalances[token], "price": filteredPrices[token], "total": filteredBalances[token] * filteredPrices[token] });
+      }
+      setWalletBalances(mixedBalances);
+      // for ETH balance, keep ethAmountToKeep $ worth of ETH
+      for (const token in mixedBalances) {
+        if (mixedBalances[token].token === "ETH") {
+          // keep ethAmountToKeep $ worth of ETH in mixedBalances
+          mixedBalances[token].balance -= ethAmountToKeep / mixedBalances[token].price;
+          mixedBalances[token].total -= ethAmountToKeep;
+        }
+      }
+      // Set investment amount
+      setBalances(mixedBalances);
+      // Calculate total wallet value
+      const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
+      setTotalWalletValue(totalWalletValue);
+      setInvestmentAmount(totalWalletValue.toFixed(5));
+
+    }
+  };
 
   useEffect(() => {
     // Call handleSwapPrepare whenever investmentBreakdown changes and is not null
     if (investmentBreakdown) {
       handleSwapPrepare();
     }
-  }, [investmentBreakdown]);
+  }, [investmentBreakdown]
+  );
 
   useEffect(() => {
     // Update investment breakdown whenever investmentAmount changes
@@ -711,83 +812,12 @@ function App() {
     } else {
       setInvestmentBreakdown(null); // Clear breakdown if no amount or solution selected
     }
-  }, [investmentAmount, selectedSolution]);
+  }, [investmentAmount, selectedSolution]
+  );
+
+
 
   useEffect(() => {
-    const fetchBalances = async () => {
-      if (walletAddress && myWalletAccount) {
-        let newBalances = {};
-        //const provider = new RpcProvider({ nodeUrl: constants.NetworkName.SN_MAIN }); // Create RpcProvider
-        const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno", headers: { 'x-apikey': rcpApiKey } }); // Create RpcProvider
-        const tokenAddresses = getMarketTokenAddress();
-        const tokenPrices = getMarketTokenPrice();
-        try {
-          for (const token in tokenAddresses) {
-            try {
-              console.log(tokenAddresses[token]);
-              const { abi: abi } = await provider.getClassAt(tokenAddresses[token]); // Fetch ABI using class hash
-              const contract = new Contract(abi, tokenAddresses[token], myWalletAccount);
-
-              // Fetch balance and decimals
-              const balanceResponse = await contract.balanceOf(walletAddress);
-              const decimalsResponse = await contract.decimals(); // Assuming the token has a "decimals" function
-
-              if (balanceResponse && decimalsResponse) {
-                const balance = uint256.uint256ToBN(balanceResponse).toString();
-                const decimals = parseInt(decimalsResponse, 10); // Convert decimals to integer
-                const adjustedBalance = (balance / 10 ** decimals).toFixed(5); // Adjust balance based on decimals
-                newBalances[token] = adjustedBalance;
-              } else {
-                console.warn(`Balance or decimals undefined for ${token}`);
-                newBalances[token] = 0; // Or handle it differently
-              }
-            } catch (err) {
-              console.error(`Error fetching balance for ${token}:`, err);
-              setErrorWithTimeout(err.message);
-            }
-          }
-        } catch (err) {
-          console.error("Error fetching balances:", err);
-          setErrorWithTimeout(err.message);
-        } finally {
-          setIsLoading(false);
-        }
-        // filter token with zero balance 
-        const filteredBalances = Object.fromEntries(
-          Object.entries(newBalances).filter(([token, balance]) => balance !== 0)
-        );
-        // get price of these tokens from filteredBalances 
-        // filteredBalances ex : {ETH: '0.00211', USDC: '9.00000', TWC: '2232.42801'}
-        // to have {token, price}
-        let filteredPrices = {};
-        for (const token in filteredBalances) {
-          filteredPrices[token] = tokenPrices[token];
-        }
-        // mix filteredBalances and filteredPrices to have : 
-        // an array of {"token": token, "balance": balance, "price": price, "total", balance*price}
-        let mixedBalances = [];
-        for (const token in filteredBalances) {
-          mixedBalances.push({ "token": token, "balance": filteredBalances[token], "price": filteredPrices[token], "total": filteredBalances[token] * filteredPrices[token] });
-        }
-        setWalletBalances(mixedBalances);
-        // for ETH balance, keep ethAmountToKeep $ worth of ETH
-        for (const token in mixedBalances) {
-          if (mixedBalances[token].token === "ETH") {
-            // keep ethAmountToKeep $ worth of ETH in mixedBalances
-            mixedBalances[token].balance -= ethAmountToKeep / mixedBalances[token].price;
-            mixedBalances[token].total -= ethAmountToKeep;
-          }
-        }
-        // Set investment amount
-        setBalances(mixedBalances);
-        // Calculate total wallet value
-        const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
-        setTotalWalletValue(totalWalletValue);
-        setInvestmentAmount(totalWalletValue.toFixed(5));
-
-      }
-    };
-
     // fetch balance with brian api
     const fetchBalancesWithBrian = async () => {
       if (walletAddress && myWalletAccount) {
@@ -833,8 +863,13 @@ function App() {
         {walletAddress ? (
           <>
             <h4>Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
-            <button onClick={handleDisconnectWallet}>Disconnect Wallet</button>
-            <h3>Wallet balance to invest</h3>
+            <button onClick={handleDisconnectWallet}>Log Out</button>
+            {/* <button onClick={handleReloadBalances} className="reload-button"> */}
+            {/*   <FontAwesomeIcon icon={faSyncAlt} /> {/* Use the reload icon */}
+            {/* </button> */}
+            <h3>
+              Wallet balance to invest
+            </h3>
             {/* Investment Input Section */}
             {totalWalletValue > 0 && (
               <div>
@@ -856,7 +891,10 @@ function App() {
               </div>
             )}
             {isLoading ? (
-              <p>Loading balances...</p>
+              <div className="loading-container">
+                <FontAwesomeIcon icon={faSpinner} spin />
+                <p>Loading balances...</p>
+              </div>
             ) : (
               <table>
                 <thead>
