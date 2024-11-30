@@ -401,117 +401,114 @@ function App() {
   const getInvestmentBreakdown = (solution, amount) => {
     // Replace this with your actual logic to fetch or calculate the breakdown
     // based on the selected solution and investment amount.
-
-    if (solution === 'Secure') {
-      return {
-        USDC: 0.6 * amount,
-        ETH: 0.3 * amount,
-        WBTC: 0.1 * amount,
-      };
-    } else if (solution === 'Balanced') {
-      // load tokens data
-      const tokensData = loadTokens();
-      // keep only good token 
-      const goodTokensData = filterTokens(tokensData);
-      console.log("filterTokens: ");
-      console.log(goodTokensData);
-      // select first biggest Market Cap
-      let tokenMcaps = getMarketTokenMcap(goodTokensData);
-      // sort by Market Cap
-      let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
-      // keep only 10th first
-      sortedTokens = sortedTokens.slice(0, 10);
-      let sortedTokensData = filterTokens(goodTokensData, sortedTokens);
-      // get token actual prices
-      const tokenPrices = getMarketTokenPrice(sortedTokensData);
-      let tokenEMA7Hourly = {};
-      let tokenMaxStdDev = {};
-      for (const token of sortedTokens) {
-        const tokenPriceHistory = extractPrices(sortedTokensData, token);
-        try {
-          const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
-          tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
-          tokenMaxStdDev[token] = tokenEMA7HourlyAndMaxStdDev.maxStdDev;
-          // detect stable coin and excluded
-          if (tokenMaxStdDev[token] < 2) {
-            if (tokenPrices[token] < 1.07 && tokenPrices[token] > 0.93) {
-              delete tokenEMA7Hourly[token];
-              delete tokenMaxStdDev[token];
-              sortedTokens = sortedTokens.filter(t => t !== token);
-            }
+    // load tokens data
+    const tokensData = loadTokens();
+    // keep only good token 
+    const goodTokensData = filterTokens(tokensData);
+    console.log("filterTokens: ");
+    console.log(goodTokensData);
+    // select first biggest Market Cap
+    let tokenMcaps = getMarketTokenMcap(goodTokensData);
+    // sort by Market Cap
+    let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
+    // keep only 10th first
+    sortedTokens = sortedTokens.slice(0, 15);
+    let sortedTokensData = filterTokens(goodTokensData, sortedTokens);
+    // get token actual prices
+    const tokenPrices = getMarketTokenPrice(sortedTokensData);
+    // get statistics about tokens
+    let tokenEMA7Hourly = {};
+    let tokenMaxStdDev = {};
+    for (const token of sortedTokens) {
+      const tokenPriceHistory = extractPrices(sortedTokensData, token);
+      try {
+        const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
+        tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
+        tokenMaxStdDev[token] = tokenEMA7HourlyAndMaxStdDev.maxStdDev;
+        // detect stablecoin and exclude them
+        if (tokenMaxStdDev[token] < 2) {
+          if (tokenPrices[token] < 1.07 && tokenPrices[token] > 0.93) {
+            delete tokenEMA7Hourly[token];
+            delete tokenMaxStdDev[token];
+            sortedTokens = sortedTokens.filter(t => t !== token);
           }
-        } catch (error) {
-          console.error(`Error calculating EMA and MaxStdDev for ${token}:`, error);
-          setError(error.message);
-          return null;
         }
-
+      } catch (error) {
+        console.error(`Error calculating EMA and MaxStdDev for ${token}:`, error);
+        setError(error.message);
+        return null;
       }
-      sortedTokensData = filterTokens(sortedTokensData, sortedTokens)
-      console.log("sortedTokens:");
-      console.log(sortedTokens);
-      // calculate % distribution per assets
-      // approx: EMA7D(Mcap) = Mcap(Today) * EMA7D(Price) / Price(Today)
-      // approx alpha to have 3% for the last asset with smallest Mcap
-      const alpha = 0.75 * Math.log(0.03) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]))
-      // take sqrt of EMA7Hourly
-      let tokenDistribution = {};
-      for (const token in tokenEMA7Hourly) {
-        tokenDistribution[token] = Math.pow(tokenMcaps[token] * tokenEMA7Hourly[token] / tokenPrices[token], alpha);
-      }
-      // calculate totalEma7Hourly
-      const totalDistribution = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
-      // calculate % distribution per assets
-      for (const token in tokenEMA7Hourly) {
-        tokenDistribution[token] = tokenDistribution[token] / totalDistribution;
-      }
-
-      // check sum of tokenDistribution == 1 
-      const sum = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
-      if (sum < 1.001 && sum > 0.999) {
-        console.log("sum: " + sum);
-        console.error("Sum of tokenDistribution is not 1");
-
-      }
-      console.log("tokenDistribution:");
-      console.log(tokenDistribution);
-      console.log("tokenEMA7Hourly:");
-      console.log(tokenEMA7Hourly);
-      console.log("tokenMaxStdDev:");
-      console.log(tokenMaxStdDev);
-
-      // Create investment breakdown based on tokenDistribution
-      let breakdown = {};
-      //let ethAmountToKeep = 2; // Keep $2 worth of ETH
-      //let ethPrice = getMarketTokenPrice()['ETH'];
-      //let ethAmountToKeepInEth = ethAmountToKeep / ethPrice;
-
-      for (const token in tokenDistribution) {
-        //if (token === 'ETH') {
-        //
-        //let maxEthToInvest = balances.find(item => item.token === 'ETH')?.balance - ethAmountToKeepInEth;
-        //let ethToInvest = Math.min(tokenDistribution[token] * amount / ethPrice, maxEthToInvest);
-        //breakdown[token] = {
-        //  amount: ethToInvest * ethPrice,
-        //  percentage: (ethToInvest * ethPrice / amount) * 100
-        //};
-        //} else {
-        breakdown[token] = {
-          amount: tokenDistribution[token] * amount,
-          percentage: tokenDistribution[token] * 100
-        };
-      }
-      return breakdown;
-
+    }
+    // Hyperparameters Solution Selection 
+    // def Balanced
+    let k_alpha = 0.75;
+    let k_mini = 0.03;
+    let n_tokens = 10;
+    if (solution === 'Secure') {
+      k_alpha = 0.8;
+      k_mini = 0.03;
+      n_tokens = 5;
     } else if (solution === 'Offensive') {
-      return {
-        STRK: 0.7 * amount,
-        ETH: 0.2 * amount,
-        WBTC: 0.1 * amount,
-      };
+      k_alpha = 0.5;
+      k_mini = 0.03;
+      n_tokens = 10;
+    };
+
+    // reduce number of tokens to n_tokens
+    sortedTokens = sortedTokens.slice(0, n_tokens);
+    // Create a new tokenEMA7Hourly object in the order of sortedTokens
+    tokenEMA7Hourly = Object.fromEntries(
+      sortedTokens.map(token => [token, tokenEMA7Hourly[token]])
+    );
+
+    // Apply the same logic to tokenMaxStdDev
+    tokenMaxStdDev = Object.fromEntries(
+      sortedTokens.map(token => [token, tokenMaxStdDev[token]])
+    );
+    sortedTokensData = filterTokens(sortedTokensData, sortedTokens);
+    console.log("sortedTokens:");
+    console.log(sortedTokens);
+    // calculate % distribution per assets
+    // approx: EMA7D(Mcap) = Mcap(Today) * EMA7D(Price) / Price(Today)
+    // approx alpha to have 3% for the last asset with smallest Mcap
+    const alpha = k_alpha * Math.log(k_mini) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]))
+    // take sqrt of EMA7Hourly
+    let tokenDistribution = {};
+    for (const token in tokenEMA7Hourly) {
+      tokenDistribution[token] = Math.pow(tokenMcaps[token] * tokenEMA7Hourly[token] / tokenPrices[token], alpha);
+    }
+    // calculate totalEma7Hourly
+    const totalDistribution = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
+    // calculate % distribution per assets
+    for (const token in tokenEMA7Hourly) {
+      tokenDistribution[token] = tokenDistribution[token] / totalDistribution;
     }
 
-    return null;
+    // check sum of tokenDistribution == 1 
+    const sum = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
+    if (sum < 1.001 && sum > 0.999) {
+      console.log("sum: " + sum);
+      console.error("Sum of tokenDistribution is not 1");
+
+    }
+    console.log("tokenDistribution:");
+    console.log(tokenDistribution);
+    console.log("tokenEMA7Hourly:");
+    console.log(tokenEMA7Hourly);
+    console.log("tokenMaxStdDev:");
+    console.log(tokenMaxStdDev);
+
+    // Create investment breakdown based on tokenDistribution
+    let breakdown = {};
+
+    for (const token in tokenDistribution) {
+      breakdown[token] = {
+        amount: tokenDistribution[token] * amount,
+        percentage: tokenDistribution[token] * 100
+      };
+    }
+    return breakdown;
+
   };
   const handleInvestmentInputChange = (e) => {
     let inputValue = e.target.value;
