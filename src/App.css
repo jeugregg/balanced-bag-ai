@@ -35,3 +35,18 @@
   position: relative;
   /* Needed for z-index to work on child (error container) */
 }
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  /* Vertically center the content */
+  justify-content: center;
+  /* Horizontally center the content */
+  height: 100px;
+  /* Adjust the height as needed */
+}
+
+.loading-container p {
+  margin-left: 10px;
+  /* Add some space between the icon and text */
+}
