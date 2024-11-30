@@ -593,16 +593,23 @@ function App() {
     // Check if input ends with '%' (percentage)
     if (inputValue.endsWith('%')) {
       const percentage = parseFloat(inputValue.slice(0, -1)) / 100;
-      inputValue = (totalWalletValue * percentage).toFixed(5);
+      inputValue = (totalWalletValue * percentage);
     } else {
       // If it's a number, ensure it doesn't exceed the total wallet value
       const amount = parseFloat(inputValue);
       if (amount > totalWalletValue - 0) {
-        inputValue = totalWalletValue.toFixed(5) - 0;
+        inputValue = totalWalletValue - 0;
       }
     }
 
     setInvestmentAmount(inputValue);
+
+    const newBalances = walletBalances.map(item => ({
+      ...item,
+      balance: (item.balance / totalWalletValue) * inputValue, // Adjust balance proportionally
+      total: (item.total / totalWalletValue) * inputValue   // Adjust total proportionally
+    }));
+    setBalances(newBalances);
   };
 
   const handlePercentageSelect = (percentage) => {
@@ -969,6 +976,7 @@ function App() {
                   id="investmentInput"
                   value={investmentAmount}
                   onChange={handleInvestmentInputChange} // Use the new handler
+                  className="investment-input"
                 />
                 {/* Percentage Buttons */}
                 <div>
@@ -989,7 +997,7 @@ function App() {
                   <table>
                     <thead>
                       <tr>
-                        <th className="table-header">Asset</th>
+                        <th className="table-header">Token</th>
                         <th className="table-header">Quantity</th>
                         <th className="table-header">Price</th>
                         <th className="table-header">Total</th>
