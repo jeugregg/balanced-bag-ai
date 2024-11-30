@@ -933,9 +933,10 @@ function App() {
         <h1>Automatic Balanced Bag by AI</h1>
         <p>
           Rebalance your <a href="https://starkware.co/starknet/" target="_blank" rel="noopener noreferrer">StarkNet</a> portfolio using AI-powered strategies.
-          Powered by <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">AVNU Finance</a> and{' '}
-          <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">Brian AI Agent</a>.
         </p>
+        <p> <i>Powered by <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">AVNU Finance</a> and{' '}
+          <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">Brian AI Agent</a>.
+        </i></p>
       </header>
 
       {showErrorContainer && (
@@ -1175,8 +1176,8 @@ function App() {
       {/* Footer */}
       <footer className="app-footer">
 
-        <a href="https://github.com/jeugregg/balanced-bag-ai" target="_blank" rel="noopener noreferrer">
-          <FontAwesomeIcon icon={faGithub} /> GitHub Repository
+        <a href="https://github.com/jeugregg/balanced-bag-ai" target="_blank" rel="noopener noreferrer" className="footer-text">
+          <FontAwesomeIcon icon={faGithub} className="footer-icon" /> GitHub Repository
         </a> - 2024 - Built by jeugregg
       </footer>
     </div >
