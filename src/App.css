@@ -4,8 +4,10 @@
 
 .error-container {
   position: fixed;
-  top: 20px;
+  bottom: 20px;
+  /* Adjust distance from bottom */
   right: 20px;
+  /* Adjust distance from right */
   padding: 10px;
   border-radius: 5px;
   background-color: lightgray;
@@ -20,6 +22,12 @@
   opacity: 1;
   transform: translateY(0);
   /* Slide down into view */
+}
+
+.bottom-right {
+  /* New class to position the error at bottom right */
+  bottom: 20px;
+  right: 20px;
 }
 
 .app-content {

@@ -818,7 +818,7 @@ function App() {
   return (
     <div>
       {showErrorContainer && (
-        <div className={`error-container ${showErrorContainer ? 'show' : ''}`}>
+        <div className={`error-container bottom-right ${showErrorContainer ? 'show' : ''}`}>
           {/* Add the 'show' class conditionally */}
           {error && <p style={{ color: errorColor }}>{error}</p>}
         </div>
