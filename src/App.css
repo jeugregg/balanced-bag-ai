@@ -50,3 +50,15 @@
   margin-left: 10px;
   /* Add some space between the icon and text */
 }
+
+.breakdown-container {
+  display: flex;
+  /* Enable flexbox layout */
+}
+
+.breakdown-column {
+  flex: 1;
+  /* Make columns take equal width */
+  margin: 0 10px;
+  /* Add some spacing between columns */
+}
