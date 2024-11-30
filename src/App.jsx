@@ -5,7 +5,7 @@ import { BrianSDK } from "@brian-ai/sdk";
 
 const mode_debug = false;
 
-
+const cgApiKey = import.meta.env.VITE_CG_API_KEY;
 // Replace with actual token contract addresses
 const tokenAddresses_default = {
   ETH: "0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7",
@@ -49,6 +49,18 @@ async function getMarket() {
       if (index_SCHIZODIO == -1) {
         data[index_SCHIZODIO].symbol = "SCHIZODIO";
         data[index_SCHIZODIO].name = "SCHIZODIO";
+      }
+      // WBTC : get BTC Mcap
+      const url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true';
+      const options = {
+        method: 'GET',
+        headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
+      };
+      const res_cg = await fetch(url, options);
+      const data_cg = await res_cg.json();
+      const index_WBTC = findIndexBySymbol(data, "WBTC");
+      if (index_WBTC != -1) {
+        data[index_WBTC]["market"]["marketCap"] = data_cg["bitcoin"]["usd_market_cap"];
       }
 
       localStorage.setItem('starknetTokens', JSON.stringify(data));
