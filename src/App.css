@@ -84,3 +84,29 @@
   text-decoration: none;
   /* Remove underline from link */
 }
+
+.app-header {
+  text-align: center;
+  padding: 20px;
+  background-color: #f0f0f0;
+  /* Optional: Add a background color */
+}
+
+.app-header h1 {
+  margin-bottom: 10px;
+  /* Add some spacing below the heading */
+}
+
+.app-header p {
+  font-size: 1.1em;
+}
+
+.app-header a {
+  /* Style links in the header */
+  color: blue;
+  text-decoration: none;
+}
+
+.app-header a:hover {
+  text-decoration: underline;
+}
