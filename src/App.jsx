@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Contract, WalletAccount, uint256, constants, RpcProvider } from "starknet";
+import React, { useState, useEffect, useRef } from "react";
+import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
 import { connect } from '@starknet-io/get-starknet';
 import { BrianSDK } from "@brian-ai/sdk";
 
@@ -328,6 +328,8 @@ function App() {
   const [balances, setBalances] = useState({});
   const [balancesWithBrian, setBalancesWithBrian] = useState(null);
   const [error, setError] = useState(null);
+  const [errorColor, setErrorColor] = useState('blue'); // Initial color
+  const errorTimeoutRef = useRef(null); // Ref to store the timeout
   const [isLoading, setIsLoading] = useState(true);
   const [totalWalletValue, setTotalWalletValue] = useState(0);
   const [investmentAmount, setInvestmentAmount] = useState("");
@@ -342,8 +344,17 @@ function App() {
   const options = {
     apiKey: brianApiKey,
   };
-
   const brian = new BrianSDK(options);
+
+  // Updated setError function to handle color change and timeout
+  const setErrorWithTimeout = (errorMessage) => {
+    setError(errorMessage);
+    setErrorColor('red'); // Set color to red on error
+    clearTimeout(errorTimeoutRef.current); // Clear any existing timeout
+    errorTimeoutRef.current = setTimeout(() => {
+      setErrorColor('blue'); // Change color back to blue after 5 seconds
+    }, 5000);
+  }
 
   const askReduceList = async () => {
     // Ask BRIAN AI to reduce token list by excluded :
@@ -784,14 +795,36 @@ function App() {
 
   return (
     <div>
+      <div className="error-container" style={{ backgroundColor: errorColor }}>
+        {error && <p>{error}</p>}
+      </div>
       <h1>Automatic Balanced Bag by AI</h1>
       <h2>Beta Version - 0.0.1 - Starknet</h2>
-      {error && <div style={{ color: "red" }}>{error}</div>}
       {walletAddress ? (
         <>
-          <h4>Wallet Address: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
+          <h4>Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
           <button onClick={handleDisconnectWallet}>Disconnect Wallet</button>
-          <h3>Wallet Assets to Invest in</h3>
+          <h3>Wallet balance to invest</h3>
+          {/* Investment Input Section */}
+          {totalWalletValue > 0 && (
+            <div>
+              <label htmlFor="investmentInput">
+                Choose Wallet Amount: $
+              </label>
+              <input
+                type="text"
+                id="investmentInput"
+                value={investmentAmount}
+                onChange={handleInvestmentInputChange} // Use the new handler
+              />
+              {/* Percentage Buttons */}
+              <div>
+                <button onClick={() => handlePercentageSelect(25)}>25%</button>
+                <button onClick={() => handlePercentageSelect(50)}>50%</button>
+                <button onClick={() => handlePercentageSelect(100)}>100%</button>
+              </div>
+            </div>
+          )}
           {isLoading ? (
             <p>Loading balances...</p>
           ) : (
@@ -843,30 +876,11 @@ function App() {
               </table>
             </>
           )}
-          {/* Investment Input Section */}
-          {totalWalletValue > 0 && (
-            <div>
-              <label htmlFor="investmentInput">
-                Enter investment amount (in $): $
-              </label>
-              <input
-                type="text"
-                id="investmentInput"
-                value={investmentAmount}
-                onChange={handleInvestmentInputChange} // Use the new handler
-              />
-              {/* Percentage Buttons */}
-              <div>
-                <button onClick={() => handlePercentageSelect(25)}>25%</button>
-                <button onClick={() => handlePercentageSelect(50)}>50%</button>
-                <button onClick={() => handlePercentageSelect(100)}>100%</button>
-              </div>
-            </div>
-          )}
+
           {/* Conditionally display Investment Solution Section */}
           {!isLoading && totalWalletValue > 0 && (
             <>
-              <h3>2- Select investment solution</h3> {/* New section title */}
+              <h3>Choose Your Investment Strategy</h3> {/* New section title */}
               <div>
                 <button
                   onClick={() => handleSolutionSelect('Secure')}
@@ -883,7 +897,7 @@ function App() {
           {/* Display Investment Breakdown Table */}
           {investmentBreakdown && (
             <>
-              <h4>Investment Breakdown:</h4>
+              <h4>Your Investment Breakdown</h4>
               <table>
                 <thead>
                   <tr>
@@ -904,10 +918,8 @@ function App() {
 
               {/* New: Swap Section always displayed if investmentBreakdown exists */}
               <>
-                <h3>3- Swap to Invest</h3>
-
+                <h3>Swaps Listing</h3>
                 {/* New: Swap Preparation Table */}
-                <h4>Swaps to Prepare:</h4>
                 <table>
                   <thead>
                     <tr>
@@ -929,10 +941,6 @@ function App() {
 
                 <button onClick={handlePrepareSwapTransactions}>Validate and Swap</button>
               </>
-
-
-
-
 
             </>
           )}
