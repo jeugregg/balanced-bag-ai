@@ -928,6 +928,16 @@ function App() {
 
   return (
     <div>
+      {/* Header */}
+      <header className="app-header">
+        <h1>Automatic Balanced Bag by AI</h1>
+        <p>
+          Rebalance your StarkNet portfolio using AI-powered strategies.
+          Powered by <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">AVNU Finance</a> and{' '}
+          <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">Brian AI Agent</a>.
+        </p>
+      </header>
+
       {showErrorContainer && (
         <div className={`error-container bottom-right ${showErrorContainer ? 'show' : ''}`}>
           {/* Add the 'show' class conditionally */}
@@ -936,7 +946,6 @@ function App() {
       )}
 
       <div className="app-content">
-        <h1>Automatic Balanced Bag by AI</h1>
         <h2>Beta Version - 0.0.1 - Starknet</h2>
         {walletAddress ? (
           <>
