@@ -1070,18 +1070,21 @@ function App() {
                 <h3>Choose Your Investment Strategy</h3> {/* New section title */}
                 <div>
                   <button
+                    title="A conservative approach that prioritizes stability and low risk. This strategy allocates a larger portion of your portfolio to stablecoins and low-volatility assets."
                     className={`investment-button ${selectedSolution === 'Secure' ? 'selected' : ''}`}
                     onClick={() => handleSolutionSelect('Secure')}
                   >
                     Secure
                   </button>
                   <button
+                    title="A balanced approach that balances risk and returns. This strategy allocates an equal portion of your portfolio to both stablecoins and high-volatility assets."
                     className={`investment-button ${selectedSolution === 'Balanced' ? 'selected' : ''}`}
                     onClick={() => handleSolutionSelect('Balanced')}
                   >
                     Balanced
                   </button>
                   <button
+                    title="An aggressive approach that prioritizes high returns and is willing to take on higher risk. This strategy allocates a larger portion of your portfolio to higher-risk assets, such as cryptocurrencies with high growth potential."
                     className={`investment-button ${selectedSolution === 'Offensive' ? 'selected' : ''}`}
                     onClick={() => handleSolutionSelect('Offensive')}
                   >
