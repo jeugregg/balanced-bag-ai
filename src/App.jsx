@@ -1,3 +1,60 @@
+/**
+ * @file This file contains the main application logic for the Automatic Balanced Bag by AI.
+ * @version 0.0.1
+ * @author jeugregg
+ * 
+ * @description This React application allows users to connect their Starknet wallet, view their token balances, 
+ * and automatically rebalance their portfolio based on different investment strategies powered by Brian AI.
+ * 
+ * @features
+ * - Connect to a Starknet wallet using Argent X.
+ * - Display current wallet balances with token quantities, prices, and total values.
+ * - Fetch token prices and market cap data from Impulse API and CoinGecko.
+ * - Use Brian AI to:
+ *   -  Reduce the token list by excluding stablecoins, liquid staking tokens, and correlated tokens.
+ *   -  Generate swap transactions for rebalancing.
+ * - Select from different investment strategies: Secure, Balanced, Offensive.
+ * - Generate an investment breakdown with target token allocation percentages and amounts.
+ * - Prepare and execute swap transactions through Brian AI.
+ * - Display swap transaction statuses (pending, loading, success, error).
+ * - Error handling and display.
+ * 
+ * @dependencies
+ * - React
+ * - Starknet.js
+ * - @starknet-io/get-starknet
+ * - @brian-ai/sdk
+ * - Recharts
+ * - FontAwesome
+ * 
+ * @environmentVariables
+ * - VITE_BRIAN_API_KEY: Brian AI API key.
+ * - VITE_RCP_API_KEY: Nethermind RCP API key.
+ * - VITE_CG_API_KEY: CoinGecko API key.
+ * 
+ * @notes
+ * - This application is currently in beta.
+ * - It is designed for use on the Starknet mainnet.
+ * - The token list and investment strategies are subject to change.
+ * 
+ * @usage
+ * 1. Set up environment variables with your API keys.
+ * 2. Run the application using a development server (e.g., `npm start`).
+ * 3. Connect your Starknet wallet using Argent X.
+ * 4. View your current wallet balances.
+ * 5. Choose an investment strategy.
+ * 6. Enter the desired investment amount or select a percentage of your total wallet value.
+ * 7. Review the generated investment breakdown.
+ * 8. Click "Swap All" to prepare and execute swap transactions.
+ * 9. Monitor the swap transaction statuses.
+ * 
+ * @futureImprovements
+ * - Support more Starknet wallets.
+ * - Add more investment strategies.
+ * - Improve user interface and user experience.
+ * - Integrate with a decentralized exchange (DEX) aggregator for optimal swap execution.
+ */
+
 import React, { useState, useEffect, useRef } from "react";
 import './App.css'; // Import your CSS file
 import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
@@ -6,7 +63,7 @@ import { BrianSDK } from "@brian-ai/sdk";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-solid-svg-icons';
 import { PieChart, Pie, Cell } from 'recharts'; // Import Recharts components
-
+import { faGithub } from '@fortawesome/free-brands-svg-icons';
 const mode_debug = false;
 
 const cgApiKey = import.meta.env.VITE_CG_API_KEY;
@@ -1106,6 +1163,13 @@ function App() {
           <button onClick={handleConnectWallet}>Connect Wallet</button>
         )}
       </div>
+      {/* Footer */}
+      <footer className="app-footer">
+
+        <a href="https://github.com/jeugregg/balanced-bag-ai" target="_blank" rel="noopener noreferrer">
+          <FontAwesomeIcon icon={faGithub} /> GitHub Repository
+        </a> - 2024 - Built by jeugregg
+      </footer>
     </div >
   );
 }

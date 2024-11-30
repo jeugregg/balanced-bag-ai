@@ -34,6 +34,7 @@
   /* Style for the main app content */
   position: relative;
   /* Needed for z-index to work on child (error container) */
+  padding-bottom: 50px;
 }
 
 .loading-container {
@@ -61,4 +62,25 @@
   /* Make columns take equal width */
   margin: 0 10px;
   /* Add some spacing between columns */
+}
+
+.app-footer {
+  text-align: center;
+  padding: 10px;
+  margin-top: 20px;
+  /* Add some space above the footer */
+  border-top: 1px solid #ccc;
+  /* Optional: Add a top border */
+
+  /* Position the footer at the bottom of the page */
+  /* position: absolute; */
+  bottom: 0;
+  width: 100%;
+}
+
+.app-footer a {
+  color: #333;
+  /* Link color */
+  text-decoration: none;
+  /* Remove underline from link */
 }
