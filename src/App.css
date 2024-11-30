@@ -66,12 +66,12 @@
 
 .app-footer {
   text-align: center;
-  padding: 10px;
+  padding: 1rem;
+  background-color: #36393f;
   margin-top: 20px;
   /* Add some space above the footer */
   border-top: 1px solid #ccc;
   /* Optional: Add a top border */
-
   /* Position the footer at the bottom of the page */
   /* position: absolute; */
   bottom: 0;
@@ -82,13 +82,17 @@
   color: #333;
   /* Link color */
   text-decoration: none;
+  color: #9172da;
   /* Remove underline from link */
 }
 
 .app-header {
   text-align: center;
   padding: 20px;
-  background-color: #f0f0f0;
+  padding: 1rem;
+  text-align: center;
+  background: linear-gradient(to bottom, #282c34, #36393f);
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
   /* Optional: Add a background color */
 }
 
@@ -103,10 +107,38 @@
 
 .app-header a {
   /* Style links in the header */
-  color: blue;
+  color: #9172da;
   text-decoration: none;
 }
 
 .app-header a:hover {
   text-decoration: underline;
+}
+
+button {
+  background-color: #f04793;
+  /* Rose magenta */
+  color: white;
+}
+
+.graph-line {
+  stroke: #99AAB5;
+  /* Bleu clair */
+}
+
+.footer-icon {
+  color: #7289DA;
+  /* Change this to any color you prefer */
+}
+
+.footer-text {
+  color: #7289DA;
+  /* Change this to any color you prefer */
+}
+
+.header a {
+  color: #9172da;
+  /* Default link color */
+  text-decoration: none;
+  /* Remove underline */
 }
