@@ -294,7 +294,7 @@ function calculateCryptoSwap(deltaTransactions) {
   // Convert deltaTransactions to an array for easier sorting
   const deltaArray = Object.entries(deltaTransactions).map(([token, amount]) => ({ token, amount }));
 
-  while (deltaArray.some(({ amount }) => amount !== 0)) {
+  while (deltaArray.some(({ amount }) => Math.abs(amount) > 1)) {
     // Sort by absolute amount to find biggest sell and buy
     deltaArray.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
@@ -337,8 +337,8 @@ function App() {
   const [investmentAmount, setInvestmentAmount] = useState("");
   const [selectedSolution, setSelectedSolution] = useState('Balanced'); // Set 'Balanced' as default
   const [investmentBreakdown, setInvestmentBreakdown] = useState(null);
-  //const [showSwapSection, setShowSwapSection] = useState(false);
   const [swapsToPrepare, setSwapsToPrepare] = useState([]);
+  const [transactionsCompleted, setTransactionsCompleted] = useState(false);
 
   // Access the API key from environment variables
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -626,6 +626,7 @@ function App() {
   const handlePrepareSwapTransactions = async () => {
 
     let steps = [];
+    let allTransactionsSuccessful = true; // Flag to track if all transactions succeed
     for (const swap of swapsToPrepare) {
       const prompt = `Swap $${swap.amount.toFixed(2)} worth of '${swap.sell}' to '${swap.buy}' on Starknet`;
       console.log(`Sending prompt to Brian: ${prompt}`);
@@ -638,7 +639,12 @@ function App() {
 
         // Handle Brian's response - you might need to parse or validate it
         console.log("Brian's Response:", brianResponse);
+
         // Check Brian's extractedParams
+        if ((Number(brianResponse[0]["data"]["toAmountUSD"]) - Number(brianResponse[0]["data"]["fromAmountUSD"])) / Number(brianResponse[0]["data"]["fromAmountUSD"]) < -0.01) {
+          console.error(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}:`, error);
+          setErrorWithTimeout(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}`);
+        }
         const extractedParams = brianResponse[0]["extractedParams"];
         if (
           extractedParams &&
@@ -649,8 +655,15 @@ function App() {
         ) {
           console.log("Swap successfully prepared:", extractedParams);
           // brianResponse[0]["data"]["steps"] to add steps
-          steps = steps.concat(brianResponse[0]["data"]["steps"]);
+          const txSteps = brianResponse[0]["data"]["steps"];
+          steps.push(txSteps);
 
+          const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
+          //const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps);
+          await myWalletAccount.waitForTransaction(transferTxHash);
+          console.log("transaction_hash:");
+          console.log(transferTxHash);
+          console.log("End Tx execution.");
           // ... (you can add further logic here, e.g., update UI) ...
         } else {
           console.error("Unexpected response from Brian:", extractedParams);
@@ -660,18 +673,23 @@ function App() {
       } catch (error) {
         console.error(`Error preparing swap for ${swap.sell} to ${swap.buy}:`, error);
         setErrorWithTimeout(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
+        allTransactionsSuccessful = false; // Set the flag to false if any transaction fails
       }
     }
 
     console.log("steps:");
     console.log(steps);
     console.log("Tx execution... ");
-    const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps.slice(0, 1));
-    //const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps);
-    await myWalletAccount.waitForTransaction(transferTxHash);
-    console.log("transaction_hash:");
-    console.log(transferTxHash);
-    console.log("End Tx execution.");
+    // Update transactionsCompleted state based on allTransactionsSuccessful flag
+    setTransactionsCompleted(allTransactionsSuccessful);
+    /* for (const txSteps of steps) {
+      const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
+      //const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps);
+      await myWalletAccount.waitForTransaction(transferTxHash);
+      console.log("transaction_hash:");
+      console.log(transferTxHash);
+      console.log("End Tx execution.");
+    } */
 
   };
 
@@ -927,7 +945,9 @@ function App() {
 
                 {/* New: Swap Section always displayed if investmentBreakdown exists */}
                 <>
-                  <h3>Swaps Listing</h3>
+                  <h3>Swap All for Rebalancing</h3>
+                  <button onClick={handlePrepareSwapTransactions}>Swap All</button>
+                  <h4>Swaps Details</h4>
                   {/* New: Swap Preparation Table */}
                   <table>
                     <thead>
@@ -948,7 +968,7 @@ function App() {
                     </tbody>
                   </table>
 
-                  <button onClick={handlePrepareSwapTransactions}>Validate and Swap</button>
+
                 </>
 
               </>
