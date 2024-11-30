@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import './App.css'; // Import your CSS file
 import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
 import { connect } from '@starknet-io/get-starknet';
 import { BrianSDK } from "@brian-ai/sdk";
@@ -330,12 +331,13 @@ function App() {
   const [error, setError] = useState(null);
   const [errorColor, setErrorColor] = useState('blue'); // Initial color
   const errorTimeoutRef = useRef(null); // Ref to store the timeout
+  const [showErrorContainer, setShowErrorContainer] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [totalWalletValue, setTotalWalletValue] = useState(0);
   const [investmentAmount, setInvestmentAmount] = useState("");
   const [selectedSolution, setSelectedSolution] = useState('Balanced'); // Set 'Balanced' as default
   const [investmentBreakdown, setInvestmentBreakdown] = useState(null);
-  const [showSwapSection, setShowSwapSection] = useState(false);
+  //const [showSwapSection, setShowSwapSection] = useState(false);
   const [swapsToPrepare, setSwapsToPrepare] = useState([]);
 
   // Access the API key from environment variables
@@ -349,12 +351,14 @@ function App() {
   // Updated setError function to handle color change and timeout
   const setErrorWithTimeout = (errorMessage) => {
     setError(errorMessage);
-    setErrorColor('red'); // Set color to red on error
-    clearTimeout(errorTimeoutRef.current); // Clear any existing timeout
+    setErrorColor('red');
+    setShowErrorContainer(true); // Show the container
+    clearTimeout(errorTimeoutRef.current);
     errorTimeoutRef.current = setTimeout(() => {
-      setErrorColor('blue'); // Change color back to blue after 5 seconds
+      setErrorColor('blue');
+      setShowErrorContainer(false); // Hide the container after 5 seconds
     }, 5000);
-  }
+  };
 
   const askReduceList = async () => {
     // Ask BRIAN AI to reduce token list by excluded :
@@ -446,7 +450,7 @@ function App() {
         }
       } catch (error) {
         console.error(`Error calculating EMA and MaxStdDev for ${token}:`, error);
-        setError(error.message);
+        setErrorWithTimeout(error.message);
         return null;
       }
     }
@@ -579,7 +583,7 @@ function App() {
       if (mode_debug !== true) {
         const market = await getMarket();
         if (market == null) {
-          setError("No price feed");
+          setErrorWithTimeout("No price feed");
         }
         console.log("market:");
         console.log(market);
@@ -591,7 +595,7 @@ function App() {
 
     } catch (err) {
       console.error("Error connecting wallet:", err);
-      setError(err.message);
+      setErrorWithTimeout(err.message);
     }
   };
   const handleDisconnectWallet = () => {
@@ -650,12 +654,12 @@ function App() {
           // ... (you can add further logic here, e.g., update UI) ...
         } else {
           console.error("Unexpected response from Brian:", extractedParams);
-          setError("Unexpected response from Brian. Please check the console.");
+          setErrorWithTimeout("Unexpected response from Brian. Please check the console.");
         }
 
       } catch (error) {
         console.error(`Error preparing swap for ${swap.sell} to ${swap.buy}:`, error);
-        setError(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
+        setErrorWithTimeout(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
       }
     }
 
@@ -718,12 +722,12 @@ function App() {
               }
             } catch (err) {
               console.error(`Error fetching balance for ${token}:`, err);
-              setError(err.message);
+              setErrorWithTimeout(err.message);
             }
           }
         } catch (err) {
           console.error("Error fetching balances:", err);
-          setError(err.message);
+          setErrorWithTimeout(err.message);
         } finally {
           setIsLoading(false);
         }
@@ -795,160 +799,166 @@ function App() {
 
   return (
     <div>
-      <div className="error-container" style={{ backgroundColor: errorColor }}>
-        {error && <p>{error}</p>}
-      </div>
-      <h1>Automatic Balanced Bag by AI</h1>
-      <h2>Beta Version - 0.0.1 - Starknet</h2>
-      {walletAddress ? (
-        <>
-          <h4>Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
-          <button onClick={handleDisconnectWallet}>Disconnect Wallet</button>
-          <h3>Wallet balance to invest</h3>
-          {/* Investment Input Section */}
-          {totalWalletValue > 0 && (
-            <div>
-              <label htmlFor="investmentInput">
-                Choose Wallet Amount: $
-              </label>
-              <input
-                type="text"
-                id="investmentInput"
-                value={investmentAmount}
-                onChange={handleInvestmentInputChange} // Use the new handler
-              />
-              {/* Percentage Buttons */}
-              <div>
-                <button onClick={() => handlePercentageSelect(25)}>25%</button>
-                <button onClick={() => handlePercentageSelect(50)}>50%</button>
-                <button onClick={() => handlePercentageSelect(100)}>100%</button>
-              </div>
-            </div>
-          )}
-          {isLoading ? (
-            <p>Loading balances...</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th className="table-header">Asset</th>
-                  <th className="table-header">Quantity</th>
-                  <th className="table-header">Price</th>
-                  <th className="table-header">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {balances.map((item) => (
-                  <tr key={item.token}>
-                    <td>{item.token}</td>
-                    <td>{item.balance}</td>
-                    <td>{item.price.toFixed(5)}</td>
-                    <td>{item.total.toFixed(5)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      {showErrorContainer && (
+        <div className={`error-container ${showErrorContainer ? 'show' : ''}`}>
+          {/* Add the 'show' class conditionally */}
+          {error && <p style={{ color: errorColor }}>{error}</p>}
+        </div>
+      )}
 
-          {/* Conditionally display Total Wallet Value */}
-          {totalWalletValue > 0 && (
-            <p>Total Wallet Value: ${totalWalletValue.toFixed(5)}</p>
-          )}
-          {/* display only if brianBalances is not empty */}
-          {balancesWithBrian && Object.keys(balancesWithBrian).length > 0 && (
-            <>
-              <h3>Table by Brian AI</h3> {/* New table */}
+      <div className="app-content">
+        <h1>Automatic Balanced Bag by AI</h1>
+        <h2>Beta Version - 0.0.1 - Starknet</h2>
+        {walletAddress ? (
+          <>
+            <h4>Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
+            <button onClick={handleDisconnectWallet}>Disconnect Wallet</button>
+            <h3>Wallet balance to invest</h3>
+            {/* Investment Input Section */}
+            {totalWalletValue > 0 && (
+              <div>
+                <label htmlFor="investmentInput">
+                  Choose Wallet Amount: $
+                </label>
+                <input
+                  type="text"
+                  id="investmentInput"
+                  value={investmentAmount}
+                  onChange={handleInvestmentInputChange} // Use the new handler
+                />
+                {/* Percentage Buttons */}
+                <div>
+                  <button onClick={() => handlePercentageSelect(25)}>25%</button>
+                  <button onClick={() => handlePercentageSelect(50)}>50%</button>
+                  <button onClick={() => handlePercentageSelect(100)}>100%</button>
+                </div>
+              </div>
+            )}
+            {isLoading ? (
+              <p>Loading balances...</p>
+            ) : (
               <table>
                 <thead>
                   <tr>
                     <th className="table-header">Asset</th>
                     <th className="table-header">Quantity</th>
+                    <th className="table-header">Price</th>
+                    <th className="table-header">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(balancesWithBrian || {}).map(([token, balance]) => (
-                    <tr key={token}>
-                      <td>{token}</td>
-                      <td>{balance || "0"}</td>
+                  {balances.map((item) => (
+                    <tr key={item.token}>
+                      <td>{item.token}</td>
+                      <td>{item.balance}</td>
+                      <td>{item.price.toFixed(5)}</td>
+                      <td>{item.total.toFixed(5)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </>
-          )}
+            )}
 
-          {/* Conditionally display Investment Solution Section */}
-          {!isLoading && totalWalletValue > 0 && (
-            <>
-              <h3>Choose Your Investment Strategy</h3> {/* New section title */}
-              <div>
-                <button
-                  onClick={() => handleSolutionSelect('Secure')}
-                  style={{ backgroundColor: selectedSolution === 'Secure' ? 'lightblue' : 'white' }} >Secure</button>
-                <button
-                  onClick={() => handleSolutionSelect('Balanced')}
-                  style={{ backgroundColor: selectedSolution === 'Balanced' ? 'lightblue' : 'white' }}>Balanced</button>
-                <button
-                  onClick={() => handleSolutionSelect('Offensive')}
-                  style={{ backgroundColor: selectedSolution === 'Offensive' ? 'lightblue' : 'white' }}>Offensive</button>
-              </div>
-            </>
-          )}
-          {/* Display Investment Breakdown Table */}
-          {investmentBreakdown && (
-            <>
-              <h4>Your Investment Breakdown</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th className="table-header">Token</th>
-                    <th className="table-header">Amount ($)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(investmentBreakdown).map(([token, data]) => (
-                    <tr key={token}>
-                      <td>{token}</td>
-                      <td>{data.amount.toFixed(2)}</td>
-                      <td>{data.percentage.toFixed(2)}%</td> {/* New column */}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* New: Swap Section always displayed if investmentBreakdown exists */}
+            {/* Conditionally display Total Wallet Value */}
+            {totalWalletValue > 0 && (
+              <p>Total Wallet Value: ${totalWalletValue.toFixed(5)}</p>
+            )}
+            {/* display only if brianBalances is not empty */}
+            {balancesWithBrian && Object.keys(balancesWithBrian).length > 0 && (
               <>
-                <h3>Swaps Listing</h3>
-                {/* New: Swap Preparation Table */}
+                <h3>Table by Brian AI</h3> {/* New table */}
                 <table>
                   <thead>
                     <tr>
-                      <th className="table-header">Sell Token</th>
-                      <th className="table-header">Buy Token</th>
+                      <th className="table-header">Asset</th>
+                      <th className="table-header">Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(balancesWithBrian || {}).map(([token, balance]) => (
+                      <tr key={token}>
+                        <td>{token}</td>
+                        <td>{balance || "0"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+
+            {/* Conditionally display Investment Solution Section */}
+            {!isLoading && totalWalletValue > 0 && (
+              <>
+                <h3>Choose Your Investment Strategy</h3> {/* New section title */}
+                <div>
+                  <button
+                    onClick={() => handleSolutionSelect('Secure')}
+                    style={{ backgroundColor: selectedSolution === 'Secure' ? 'lightblue' : 'white' }} >Secure</button>
+                  <button
+                    onClick={() => handleSolutionSelect('Balanced')}
+                    style={{ backgroundColor: selectedSolution === 'Balanced' ? 'lightblue' : 'white' }}>Balanced</button>
+                  <button
+                    onClick={() => handleSolutionSelect('Offensive')}
+                    style={{ backgroundColor: selectedSolution === 'Offensive' ? 'lightblue' : 'white' }}>Offensive</button>
+                </div>
+              </>
+            )}
+            {/* Display Investment Breakdown Table */}
+            {investmentBreakdown && (
+              <>
+                <h4>Your Investment Breakdown</h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th className="table-header">Token</th>
                       <th className="table-header">Amount ($)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {swapsToPrepare.map((swap, index) => (
-                      <tr key={index}>
-                        <td>{swap.sell}</td>
-                        <td>{swap.buy}</td>
-                        <td>{swap.amount.toFixed(2)}</td>
+                    {Object.entries(investmentBreakdown).map(([token, data]) => (
+                      <tr key={token}>
+                        <td>{token}</td>
+                        <td>{data.amount.toFixed(2)}</td>
+                        <td>{data.percentage.toFixed(2)}%</td> {/* New column */}
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                <button onClick={handlePrepareSwapTransactions}>Validate and Swap</button>
+                {/* New: Swap Section always displayed if investmentBreakdown exists */}
+                <>
+                  <h3>Swaps Listing</h3>
+                  {/* New: Swap Preparation Table */}
+                  <table>
+                    <thead>
+                      <tr>
+                        <th className="table-header">Sell Token</th>
+                        <th className="table-header">Buy Token</th>
+                        <th className="table-header">Amount ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {swapsToPrepare.map((swap, index) => (
+                        <tr key={index}>
+                          <td>{swap.sell}</td>
+                          <td>{swap.buy}</td>
+                          <td>{swap.amount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <button onClick={handlePrepareSwapTransactions}>Validate and Swap</button>
+                </>
+
               </>
+            )}
 
-            </>
-          )}
-
-        </>
-      ) : (
-        <button onClick={handleConnectWallet}>Connect Wallet</button>
-      )}
+          </>
+        ) : (
+          <button onClick={handleConnectWallet}>Connect Wallet</button>
+        )}
+      </div>
     </div>
   );
 }

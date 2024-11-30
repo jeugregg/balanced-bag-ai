@@ -1,3 +1,29 @@
 .table-header {
-      background-color: lightorange;
-    }
+  background-color: lightorange;
+}
+
+.error-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: lightgray;
+  transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+  opacity: 0;
+  transform: translateY(-20px);
+  /* Initially hidden above the viewport */
+  z-index: 10;
+}
+
+.error-container.show {
+  opacity: 1;
+  transform: translateY(0);
+  /* Slide down into view */
+}
+
+.app-content {
+  /* Style for the main app content */
+  position: relative;
+  /* Needed for z-index to work on child (error container) */
+}
