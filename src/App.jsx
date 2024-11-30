@@ -981,44 +981,48 @@ function App() {
               <>
                 <h4>Your Investment Breakdown</h4>
                 <div className="breakdown-container"> {/* Container for table and chart */}
-                  <table className="breakdown-table">
-                    <thead>
-                      <tr>
-                        <th className="table-header">Token</th>
-                        <th className="table-header">Amount ($)</th>
-                        <th className="table-header">Percentage (%)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(investmentBreakdown).map(([token, data]) => (
-                        <tr key={token}>
-                          <td>{token}</td>
-                          <td>{data.amount.toFixed(2)}</td>
-                          <td>{data.percentage.toFixed(1)}</td>
+                  <div className="breakdown-column"> {/* Column for the table */}
+                    <table className="breakdown-table">
+                      <thead>
+                        <tr>
+                          <th className="table-header">Token</th>
+                          <th className="table-header">Amount ($)</th>
+                          <th className="table-header">Percentage (%)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {Object.entries(investmentBreakdown).map(([token, data]) => (
+                          <tr key={token}>
+                            <td>{token}</td>
+                            <td>{data.amount.toFixed(2)}</td>
+                            <td>{data.percentage.toFixed(1)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-                  {/* Pie Chart */}
-                  <PieChart width={400} height={300} className="breakdown-chart">
-                    <Pie
-                      data={pieChartData}
-                      cx={150}
-                      cy={150}
-                      innerRadius={60}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                      labelLine={true}
-                      label={({ name, value }) => `${name} ${value.toFixed(1)}%`} // Format label to include name
-                    >
-                      {pieChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
+                  <div className="breakdown-column"> {/* Column for the pie chart */}
+                    {/* Pie Chart */}
+                    <PieChart width={400} height={300} className="breakdown-chart" margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
+                      <Pie
+                        data={pieChartData}
+                        cx={150}
+                        cy={150}
+
+                        outerRadius={80}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                        labelLine={true}
+                        label={({ name, value }) => `${name} ${value.toFixed(1)}%`}
+                      >
+                        {pieChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </div>
                 </div> {/* End of breakdown-container */}
 
                 {/* New: Swap Section always displayed if investmentBreakdown exists */}
