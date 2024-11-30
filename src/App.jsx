@@ -583,6 +583,14 @@ function App() {
       setError(err.message);
     }
   };
+  const handleDisconnectWallet = () => {
+    // Reset state variables related to the wallet
+    setMyWalletAccount(null);
+    setWalletAddress(null);
+    setWalletBalances({});
+    setBalances({});
+    setIsLoading(true); // Optionally set isLoading to true while balances are cleared
+  };
 
   const handleSwapPrepare = () => {
     // Create currentWallet and targetWallet objects for calculateCryptoSwap
@@ -776,13 +784,14 @@ function App() {
 
   return (
     <div>
-      <h1>StarkNet Portfolio Wallet - Automatic Balanced Bag</h1>
-      <h2>Beta Version - 0.0.1</h2>
-      <h3>1- Select amount to invest</h3>
+      <h1>Automatic Balanced Bag by AI</h1>
+      <h2>Beta Version - 0.0.1 - Starknet</h2>
       {error && <div style={{ color: "red" }}>{error}</div>}
       {walletAddress ? (
         <>
-          <h4>Wallet Address: {walletAddress}</h4>
+          <h4>Wallet Address: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
+          <button onClick={handleDisconnectWallet}>Disconnect Wallet</button>
+          <h3>Wallet Assets to Invest in</h3>
           {isLoading ? (
             <p>Loading balances...</p>
           ) : (
