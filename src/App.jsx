@@ -400,7 +400,7 @@ function App() {
   const [swapsToPrepare, setSwapsToPrepare] = useState([]);
   const [transactionsCompleted, setTransactionsCompleted] = useState(false);
   const [swapStatuses, setSwapStatuses] = useState([]); // Array to store swap statuses
-
+  const [loadingToken, setLoadingToken] = useState(null);
 
   // Access the API key from environment variables
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -796,6 +796,7 @@ function App() {
       const tokenPrices = getMarketTokenPrice();
       try {
         for (const token in tokenAddresses) {
+          setLoadingToken(token); // Update the loading token state
           try {
             console.log(tokenAddresses[token]);
             const { abi: abi } = await provider.getClassAt(tokenAddresses[token]); // Fetch ABI using class hash
@@ -989,7 +990,7 @@ function App() {
             {isLoading ? (
               <div className="loading-container">
                 <FontAwesomeIcon icon={faSpinner} spin />
-                <p>Loading balances...</p>
+                <p>Loading balances... {loadingToken}</p>
               </div>
             ) : (
               <div className="breakdown-container">
