@@ -2,7 +2,7 @@
 
 ## For StarkNet Wallet
 
-This web app is a portfolio manager on the StarkNet blockchain designed to automatically rebalance your wallet assets using AI.
+This web app is a portfolio manager on the StarkNet blockchain ([StarkNet website](https://starkware.co/starknet/)) designed to automatically rebalance your wallet assets using AI.
 
 **Features:**
 
@@ -26,15 +26,14 @@ This web app is a portfolio manager on the StarkNet blockchain designed to autom
 
 **Code Overview:**
 
-**`index.html`:** The main HTML file for the application.
-
-**`package.json`:** Contains project dependencies and scripts for development.
-
-**`App.jsx`:**
-
 * **`getMarket()`:** Fetches token data from the AVNU Finance API and stores it in local storage.
 * **`findIndexBySymbol()`:** Helper function to find the index of a token in an array based on its symbol.
 * **`extractBrianBalances()`:** Extracts relevant balance information from Brian AI's response.
+* **`getInvestmentBreakdown()`:**  This function analyzes your current portfolio holdings and returns a breakdown of your investments. 
+    * It uses `extractBrianBalances` to determine the value of your assets.
+    * It then calculates the percentage allocation of each token in your portfolio.
+    * This information can be used to display a summary of your investment distribution to the user. 
+
 
 **How It Works:**
 
@@ -55,6 +54,7 @@ This web app is a portfolio manager on the StarkNet blockchain designed to autom
 
 This project is for educational and demonstration purposes only. Use it at your own risk. Always do your own research before investing in cryptocurrencies.
 
-## Fix
+## Issues
 
 - **Token Availability and Prices:** Please note that all tokens on StarkNet and their corresponding prices may not always be available. This can be due to various factors such as market volatility, data provider limitations, or temporary technical issues. 
+- **Swap Issues (USDC and Low Liquidity Tokens):** You might encounter difficulties when swapping USDC or tokens with low liquidity. These issues could manifest as failed transactions or unfavorable exchange rates. This is often due to insufficient liquidity in the corresponding pools. 
