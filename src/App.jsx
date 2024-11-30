@@ -4,8 +4,8 @@ import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
 import { connect } from '@starknet-io/get-starknet';
 import { BrianSDK } from "@brian-ai/sdk";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faTimes, faSpinner, faHandSpock, faSyncAlt } from '@fortawesome/free-solid-svg-icons';
-import { PieChart, Pie, Cell, Legend } from 'recharts'; // Import Recharts components
+import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-solid-svg-icons';
+import { PieChart, Pie, Cell } from 'recharts'; // Import Recharts components
 
 const mode_debug = false;
 
