@@ -4,6 +4,8 @@
 
 This web app is a portfolio manager on the StarkNet blockchain ([StarkNet website](https://starkware.co/starknet/)) designed to automatically rebalance your wallet assets using AI.
 
+Demo live here : [https://balanced-bag-ai.netlify.app/](https://balanced-bag-ai.netlify.app/)
+
 **Features:**
 
 * **Automated Rebalancing:**  Rebalance your portfolio based on chosen strategies.

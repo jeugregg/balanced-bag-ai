@@ -1062,14 +1062,23 @@ function App() {
                 <h3>Choose Your Investment Strategy</h3> {/* New section title */}
                 <div>
                   <button
+                    className={`investment-button ${selectedSolution === 'Secure' ? 'selected' : ''}`}
                     onClick={() => handleSolutionSelect('Secure')}
-                    style={{ backgroundColor: selectedSolution === 'Secure' ? 'lightblue' : 'white' }} >Secure</button>
+                  >
+                    Secure
+                  </button>
                   <button
+                    className={`investment-button ${selectedSolution === 'Balanced' ? 'selected' : ''}`}
                     onClick={() => handleSolutionSelect('Balanced')}
-                    style={{ backgroundColor: selectedSolution === 'Balanced' ? 'lightblue' : 'white' }}>Balanced</button>
+                  >
+                    Balanced
+                  </button>
                   <button
+                    className={`investment-button ${selectedSolution === 'Offensive' ? 'selected' : ''}`}
                     onClick={() => handleSolutionSelect('Offensive')}
-                    style={{ backgroundColor: selectedSolution === 'Offensive' ? 'lightblue' : 'white' }}>Offensive</button>
+                  >
+                    Offensive
+                  </button>
                 </div>
               </>
             )}
@@ -1128,7 +1137,7 @@ function App() {
                   <button onClick={handlePrepareSwapTransactions}>Swap All</button>
                   <h4>Swaps Details</h4>
                   {/* New: Swap Preparation Table */}
-                  <table>
+                  <table className="swaps-table">
                     <thead>
                       <tr>
                         <th className="table-header">Sell Token</th>

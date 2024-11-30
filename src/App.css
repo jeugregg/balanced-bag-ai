@@ -39,6 +39,10 @@
   position: relative;
   /* Needed for z-index to work on child (error container) */
   padding-bottom: 50px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+  padding: 1rem;
 }
 
 .loading-container {
@@ -84,10 +88,8 @@
 
 .app-footer a {
   color: #333;
-  /* Link color */
   text-decoration: none;
   color: #9172da;
-  /* Remove underline from link */
 }
 
 .app-header {
@@ -145,4 +147,27 @@ button {
   /* Default link color */
   text-decoration: none;
   /* Remove underline */
+}
+
+.investment-button {
+  background-color: #972955;
+  /* Rose magenta */
+}
+
+.investment-button.selected {
+  background-color: #f04793;
+  font-weight: bold;
+}
+
+.swaps-table {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table {
+  margin-left: auto;
+  margin-right: auto;
+  background: linear-gradient(to bottom, #333843, #4f545d);
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+  /* couleur de fond légèrement plus claire que la couleur de fond de l'app */
 }
