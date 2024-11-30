@@ -329,7 +329,7 @@ function App() {
   const [myWalletAccount, setMyWalletAccount] = useState(null);
   const [walletAddress, setWalletAddress] = useState(null);
   const [walletBalances, setWalletBalances] = useState({});
-  const [balances, setBalances] = useState({});
+  const [balances, setBalances] = useState([]);
   const [balancesWithBrian, setBalancesWithBrian] = useState(null);
   const [error, setError] = useState(null);
   const [errorColor, setErrorColor] = useState('blue'); // Initial color
@@ -802,6 +802,13 @@ function App() {
     value: data.percentage
   })) : [];
 
+
+  const pieChartDataBalances = !isLoading && Array.isArray(balances) ? balances.map((item) => ({
+    name: item.token,
+    value: parseFloat(item.total)
+  })) : [];
+
+
   // Expanded color palette with 15 colors
   const COLORS = [
     '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#D9D9D9',
@@ -910,26 +917,49 @@ function App() {
                 <p>Loading balances...</p>
               </div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th className="table-header">Asset</th>
-                    <th className="table-header">Quantity</th>
-                    <th className="table-header">Price</th>
-                    <th className="table-header">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {balances.map((item) => (
-                    <tr key={item.token}>
-                      <td>{item.token}</td>
-                      <td>{item.balance}</td>
-                      <td>{item.price.toFixed(5)}</td>
-                      <td>{item.total.toFixed(5)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="breakdown-container">
+                <div className="breakdown-column">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th className="table-header">Asset</th>
+                        <th className="table-header">Quantity</th>
+                        <th className="table-header">Price</th>
+                        <th className="table-header">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {balances.map((item) => (
+                        <tr key={item.token}>
+                          <td>{item.token}</td>
+                          <td>{item.balance}</td>
+                          <td>{item.price.toFixed(5)}</td>
+                          <td>{item.total.toFixed(5)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="breakdown-column">
+                  <PieChart width={400} height={300} className="breakdown-chart" margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
+                    <Pie
+                      data={pieChartDataBalances} // Use pieChartDataBalances here
+                      cx={150}
+                      cy={150}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      paddingAngle={5}
+                      dataKey="value"
+                      labelLine={true}
+                      label={({ name, value }) => `${name} ${((value / totalWalletValue) * 100).toFixed(1)}%`} // Calculate percentage
+                    >
+                      {pieChartDataBalances.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </div>
+              </div>
             )}
 
             {/* Conditionally display Total Wallet Value */}
