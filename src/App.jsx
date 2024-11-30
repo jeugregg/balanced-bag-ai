@@ -3,6 +3,8 @@ import './App.css'; // Import your CSS file
 import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
 import { connect } from '@starknet-io/get-starknet';
 import { BrianSDK } from "@brian-ai/sdk";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-solid-svg-icons';
 
 const mode_debug = false;
 
@@ -339,6 +341,8 @@ function App() {
   const [investmentBreakdown, setInvestmentBreakdown] = useState(null);
   const [swapsToPrepare, setSwapsToPrepare] = useState([]);
   const [transactionsCompleted, setTransactionsCompleted] = useState(false);
+  const [swapStatuses, setSwapStatuses] = useState([]); // Array to store swap statuses
+
 
   // Access the API key from environment variables
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -624,74 +628,73 @@ function App() {
   };
 
   const handlePrepareSwapTransactions = async () => {
+    setTransactionsCompleted(false); // Reset transactionsCompleted state
+    const newSwapStatuses = swapsToPrepare.map(() => 'pending'); // Set initial status to loading
+    setSwapStatuses(newSwapStatuses);
 
-    let steps = [];
-    let allTransactionsSuccessful = true; // Flag to track if all transactions succeed
-    for (const swap of swapsToPrepare) {
+    let allTransactionsSuccessful = true;
+    for (let i = 0; i < swapsToPrepare.length; i++) {
+      newSwapStatuses[i] = 'loading'; // Update status to loading before execution
+      setSwapStatuses([...newSwapStatuses]);
+      const swap = swapsToPrepare[i];
       const prompt = `Swap $${swap.amount.toFixed(2)} worth of '${swap.sell}' to '${swap.buy}' on Starknet`;
       console.log(`Sending prompt to Brian: ${prompt}`);
 
       try {
         const brianResponse = await brian.transact({
           prompt: prompt,
-          address: walletAddress, // Assuming walletAddress is available
+          address: walletAddress,
         });
 
-        // Handle Brian's response - you might need to parse or validate it
         console.log("Brian's Response:", brianResponse);
 
         // Check Brian's extractedParams
         if ((Number(brianResponse[0]["data"]["toAmountUSD"]) - Number(brianResponse[0]["data"]["fromAmountUSD"])) / Number(brianResponse[0]["data"]["fromAmountUSD"]) < -0.01) {
-          console.error(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}:`, error);
+          console.error(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}:`);
           setErrorWithTimeout(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}`);
+          newSwapStatuses[i] = 'error'; // Set status to error
+          setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
+          continue; // Skip to the next swap
         }
+
         const extractedParams = brianResponse[0]["extractedParams"];
         if (
           extractedParams &&
           extractedParams.action === "swap" &&
           extractedParams.chain === "Starknet" &&
-          extractedParams.token1 === swap.sell && // Make sure tokens match
-          extractedParams.token2 === swap.buy   // Make sure tokens match
+          extractedParams.token1 === swap.sell &&
+          extractedParams.token2 === swap.buy
         ) {
           console.log("Swap successfully prepared:", extractedParams);
-          // brianResponse[0]["data"]["steps"] to add steps
           const txSteps = brianResponse[0]["data"]["steps"];
-          steps.push(txSteps);
 
           const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
-          //const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps);
           await myWalletAccount.waitForTransaction(transferTxHash);
-          console.log("transaction_hash:");
-          console.log(transferTxHash);
+          console.log("transaction_hash:", transferTxHash);
           console.log("End Tx execution.");
-          // ... (you can add further logic here, e.g., update UI) ...
+
+          newSwapStatuses[i] = 'success'; // Set status to success
+          setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
         } else {
           console.error("Unexpected response from Brian:", extractedParams);
           setErrorWithTimeout("Unexpected response from Brian. Please check the console.");
+          newSwapStatuses[i] = 'error'; // Set status to error
+          setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
         }
 
       } catch (error) {
         console.error(`Error preparing swap for ${swap.sell} to ${swap.buy}:`, error);
         setErrorWithTimeout(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
-        allTransactionsSuccessful = false; // Set the flag to false if any transaction fails
+        allTransactionsSuccessful = false;
+        newSwapStatuses[i] = 'error'; // Set status to error
+        setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
       }
     }
 
-    console.log("steps:");
-    console.log(steps);
-    console.log("Tx execution... ");
     // Update transactionsCompleted state based on allTransactionsSuccessful flag
     setTransactionsCompleted(allTransactionsSuccessful);
-    /* for (const txSteps of steps) {
-      const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
-      //const { transaction_hash: transferTxHash } = await myWalletAccount.execute(steps);
-      await myWalletAccount.waitForTransaction(transferTxHash);
-      console.log("transaction_hash:");
-      console.log(transferTxHash);
-      console.log("End Tx execution.");
-    } */
-
   };
+
 
   useEffect(() => {
     // Call handleSwapPrepare whenever investmentBreakdown changes and is not null
@@ -955,6 +958,7 @@ function App() {
                         <th className="table-header">Sell Token</th>
                         <th className="table-header">Buy Token</th>
                         <th className="table-header">Amount ($)</th>
+                        <th className="table-header">Status</th> {/* New: Status column */}
                       </tr>
                     </thead>
                     <tbody>
@@ -963,6 +967,20 @@ function App() {
                           <td>{swap.sell}</td>
                           <td>{swap.buy}</td>
                           <td>{swap.amount.toFixed(2)}</td>
+                          <td> {/* New: Status cell */}
+                            {swapStatuses[index] === 'pending' && (
+                              <FontAwesomeIcon icon={faHandSpock} />
+                            )}
+                            {swapStatuses[index] === 'loading' && (
+                              <FontAwesomeIcon icon={faSpinner} spin />
+                            )}
+                            {swapStatuses[index] === 'success' && (
+                              <FontAwesomeIcon icon={faCheck} style={{ color: 'green' }} />
+                            )}
+                            {swapStatuses[index] === 'error' && (
+                              <FontAwesomeIcon icon={faTimes} style={{ color: 'red' }} />
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
