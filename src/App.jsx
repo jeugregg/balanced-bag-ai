@@ -1007,9 +1007,9 @@ function App() {
                       {balances.map((item) => (
                         <tr key={item.token}>
                           <td>{item.token}</td>
-                          <td>{item.balance}</td>
+                          <td>{Number(item.balance).toFixed(5)}</td>
                           <td>{item.price.toFixed(5)}</td>
-                          <td>{item.total.toFixed(5)}</td>
+                          <td>{item.total.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
