@@ -4,6 +4,8 @@
 
 This web app is a portfolio manager on the StarkNet blockchain ([StarkNet website](https://starkware.co/starknet/)) designed to automatically rebalance your wallet assets using AI.
 
+To be effective, you need to execute it every weeks or months.
+
 Demo live here : [https://balanced-bag-ai.netlify.app/](https://balanced-bag-ai.netlify.app/)
 
 **Features:**
@@ -60,3 +62,4 @@ This project is for educational and demonstration purposes only. Use it at your 
 
 - **Token Availability and Prices:** Please note that all tokens on StarkNet and their corresponding prices may not always be available. This can be due to various factors such as market volatility, data provider limitations, or temporary technical issues. 
 - **Swap Issues (USDC and Low Liquidity Tokens):** You might encounter difficulties when swapping USDC or tokens with low liquidity. These issues could manifest as failed transactions or unfavorable exchange rates. This is often due to insufficient liquidity in the corresponding pools. 
+
