@@ -55,20 +55,55 @@
  * - Integrate with a decentralized exchange (DEX) aggregator for optimal swap execution.
  */
 
-import React, { useState, useEffect, useRef } from "react";
-import './App.css'; // Import your CSS file
+import React, { useState, useEffect, useRef, ChangeEvent } from "react";
+import './App.css';
 import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
 import { connect } from '@starknet-io/get-starknet';
 import { BrianSDK } from "@brian-ai/sdk";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-solid-svg-icons';
-import { PieChart, Pie, Cell } from 'recharts'; // Import Recharts components
+import { PieChart, Pie, Cell } from 'recharts';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
+
 const mode_debug = false;
 
-const cgApiKey = import.meta.env.VITE_CG_API_KEY;
-// Replace with actual token contract addresses
-const tokenAddresses_default = {
+const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
+
+interface TokenData {
+  position: number;
+  name: string;
+  symbol: string;
+  address: string;
+  decimals: number;
+  market: {
+    currentPrice: number;
+    marketCap: number;
+    starknetTvl: number;
+  };
+  linePriceFeedInUsd?: { value: number }[];
+}
+
+interface BalanceItem {
+  token: string;
+  balance: number;
+  price: number;
+  total: number;
+}
+
+interface InvestmentBreakdown {
+  [token: string]: {
+    amount: number;
+    percentage: number;
+  };
+}
+
+interface Swap {
+  sell: string;
+  buy: string;
+  amount: number;
+}
+
+const tokenAddresses_default: Record<string, string> = {
   ETH: "0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7",
   STRK: "0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D",
   USDC: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
@@ -78,7 +113,7 @@ const tokenAddresses_default = {
 
 const ethAmountToKeep = 2;
 
-function findIndexBySymbol(data, symbol_search) {
+function findIndexBySymbol(data: TokenData[], symbol_search: string): number {
   for (let i = 0; i < data.length; i++) {
     if (data[i].symbol === symbol_search) {
       return i;
@@ -87,7 +122,7 @@ function findIndexBySymbol(data, symbol_search) {
   return -1; // Return -1 if symbol not found
 }
 
-async function getMarket() {
+async function getMarket(): Promise<TokenData[] | null> {
   const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', {
     method: 'GET',
     headers: {},
@@ -107,7 +142,7 @@ async function getMarket() {
       }
       // patch "SCHIZODIO "
       const index_SCHIZODIO = findIndexBySymbol(data, "SCHIZODIO ");
-      if (index_SCHIZODIO == -1) {
+      if (index_SCHIZODIO != -1) {
         data[index_SCHIZODIO].symbol = "SCHIZODIO";
         data[index_SCHIZODIO].name = "SCHIZODIO";
       }
@@ -136,7 +171,7 @@ async function getMarket() {
   return null;
 }
 
-function getMarketTokenSymbol(tokens = null) {
+function getMarketTokenSymbol(tokens: TokenData[] | null = null): string[] {
   // get all token symbol 
   // tokens is a list of data like that : 
   // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
@@ -148,7 +183,7 @@ function getMarketTokenSymbol(tokens = null) {
   return tokenSymbols;
 }
 
-function getMarketTokenAddress(tokens = null) {
+function getMarketTokenAddress(tokens: TokenData[] | null = null): Record<string, string> {
   // get all token address from localstorage
   if (tokens === null) {
     tokens = loadTokens();
@@ -162,21 +197,21 @@ function getMarketTokenAddress(tokens = null) {
   return tokenAddresses;
 }
 
-function getMarketTokenPrice(tokens = null) {
+function getMarketTokenPrice(tokens: TokenData[] | null = null): Record<string, number> {
   // get all token price from localstorage
   if (tokens === null) {
     tokens = loadTokens();
   }
   // get all token symbol 
   // tokens is a list of data like that : 
-  // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
+  // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741B1562B82f9e004dc7","decim...
   // return structure  {token1:  address1, token2: address2...} 
   //let tokenPrices = tokens.map(token => ({[token.symbol]: token.market.currentPrice}));
   const tokenPrices = tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.market.currentPrice }), {});
   return tokenPrices;
 }
 
-function extractPrices(data, tokenSymbol) {
+function extractPrices(data: TokenData[], tokenSymbol: string): number[] {
   if (!data || data.length === 0) {
     return [];
   }
@@ -191,12 +226,12 @@ function extractPrices(data, tokenSymbol) {
   return tokenData.linePriceFeedInUsd.map(priceData => priceData.value);
 }
 
-function loadTokens() {
+function loadTokens(): TokenData[] {
   const storedTokens = localStorage.getItem('starknetTokens');
   const tokens = JSON.parse(storedTokens);
   return tokens;
 }
-function getMarketTokenMcap(tokens = null) {
+function getMarketTokenMcap(tokens: TokenData[] | null = null): Record<string, number> {
   // get Market Cap from localstorage
   if (tokens === null) {
     tokens = loadTokens();
@@ -211,7 +246,7 @@ function getMarketTokenMcap(tokens = null) {
 }
 
 // Assuming brianBalances is an array of objects returned by the Brian API
-function extractBrianBalances(brianBalance) {
+function extractBrianBalances(brianBalance: any): Record<string, number> | 0 {
   if (!brianBalance || brianBalance.length === 0) {
     return 0; // No balances to check
   }
@@ -232,7 +267,7 @@ function extractBrianBalances(brianBalance) {
   }
 }
 
-function extractAllBrianBalances(brianBalances) {
+function extractAllBrianBalances(brianBalances: any[]): Record<string, number>[] | 0 {
   if (!brianBalances || brianBalances.length === 0) {
     return 0; // No balances to check
   }
@@ -252,7 +287,7 @@ function extractAllBrianBalances(brianBalances) {
   return extractedBalances;
 }
 
-function calculateEMA7HourlyAndMaxStdDev(prices) {
+function calculateEMA7HourlyAndMaxStdDev(prices: number[]): { ema: number, maxStdDev: number } {
   let length = prices.length;
   if (length < 168) {
     if (length < 1) {
@@ -282,7 +317,7 @@ function calculateEMA7HourlyAndMaxStdDev(prices) {
   return { ema, maxStdDev };
 }
 
-const reduceTokenList = (tokens) => {
+const reduceTokenList = (tokens: TokenData[]): string[] => {
   // reduce list of tokens by removing ???
   // TODO : make it better
   const uniqueTokens = {};
@@ -300,11 +335,11 @@ const reduceTokenList = (tokens) => {
   return listReducedTokens;
 };
 
-function removeTokensWithSuffix(tokens, suffix) {
+function removeTokensWithSuffix(tokens: string[], suffix: string): string[] {
   return tokens.filter(token => !token.endsWith(suffix) || token === suffix);
 }
 
-function filterTokens(tokens, listReducedTokensInput = null) {
+function filterTokens(tokens: TokenData[], listReducedTokensInput: string[] | null = null): TokenData[] {
   // if listReducedTokensInput is not null, use it
   if (listReducedTokensInput) {
     const goodTokens = tokens.filter(token => {
@@ -315,7 +350,7 @@ function filterTokens(tokens, listReducedTokensInput = null) {
 
   // if listReducedTokensInput is null, use localStorage
   const listReducedTokensString = localStorage.getItem('listReducedTokens');
-  // if data in localStorage
+  // if data in LocalStorage
   if (listReducedTokensString) {
     const listReducedTokens = JSON.parse(listReducedTokensString);
     const goodTokens = tokens.filter(token => {
@@ -323,11 +358,11 @@ function filterTokens(tokens, listReducedTokensInput = null) {
     });
     return goodTokens;
   }
-  // if no data in localStorage, return all tokens
+  // if no data in LocalStorage, return all tokens
   return tokens;
 }
 
-function calculateCryptoDelta(currentWallet, targetWallet) {
+function calculateCryptoDelta(currentWallet: Record<string, number>, targetWallet: Record<string, number>): Record<string, number> {
   const deltaTransactions = {};
 
   // Create a unique list of tokens (no duplicates)
@@ -344,7 +379,7 @@ function calculateCryptoDelta(currentWallet, targetWallet) {
   return deltaTransactions;
 }
 
-function calculateCryptoSwap(deltaTransactions) {
+function calculateCryptoSwap(deltaTransactions: Record<string, number>): Swap[] {
   // with deltaTransactions, create a swaps array with token sell, token buy, amount
   // loop if all deltaTransactions is not zero 
   // use deltaTransactions to take the lowest and the highest amount 
@@ -383,24 +418,24 @@ function calculateCryptoSwap(deltaTransactions) {
 
 
 function App() {
-  const [myWalletAccount, setMyWalletAccount] = useState(null);
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [walletBalances, setWalletBalances] = useState({});
-  const [balances, setBalances] = useState([]);
-  const [balancesWithBrian, setBalancesWithBrian] = useState(null);
-  const [error, setError] = useState(null);
-  const [errorColor, setErrorColor] = useState('blue'); // Initial color
-  const errorTimeoutRef = useRef(null); // Ref to store the timeout
-  const [showErrorContainer, setShowErrorContainer] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [totalWalletValue, setTotalWalletValue] = useState(0);
-  const [investmentAmount, setInvestmentAmount] = useState("");
-  const [selectedSolution, setSelectedSolution] = useState('Balanced'); // Set 'Balanced' as default
-  const [investmentBreakdown, setInvestmentBreakdown] = useState(null);
-  const [swapsToPrepare, setSwapsToPrepare] = useState([]);
-  const [transactionsCompleted, setTransactionsCompleted] = useState(false);
-  const [swapStatuses, setSwapStatuses] = useState([]); // Array to store swap statuses
-  const [loadingToken, setLoadingToken] = useState(null);
+  const [myWalletAccount, setMyWalletAccount] = useState<WalletAccount | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletBalances, setWalletBalances] = useState<BalanceItem[]>([]);
+  const [balances, setBalances] = useState<BalanceItem[]>([]);
+  const [balancesWithBrian, setBalancesWithBrian] = useState<Record<string, number>[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [errorColor, setErrorColor] = useState<string>('blue');
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [showErrorContainer, setShowErrorContainer] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [totalWalletValue, setTotalWalletValue] = useState<number>(0);
+  const [investmentAmount, setInvestmentAmount] = useState<string>("");
+  const [selectedSolution, setSelectedSolution] = useState<string>('Balanced');
+  const [investmentBreakdown, setInvestmentBreakdown] = useState<InvestmentBreakdown | null>(null);
+  const [swapsToPrepare, setSwapsToPrepare] = useState<Swap[]>([]);
+  const [transactionsCompleted, setTransactionsCompleted] = useState<boolean>(false);
+  const [swapStatuses, setSwapStatuses] = useState<string[]>([]);
+  const [loadingToken, setLoadingToken] = useState<string | null>(null);
 
   // Access the API key from environment variables
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -411,7 +446,7 @@ function App() {
   const brian = new BrianSDK(options);
 
   // Updated setError function to handle color change and timeout
-  const setErrorWithTimeout = (errorMessage) => {
+  const setErrorWithTimeout = (errorMessage: string) => {
     setError(errorMessage);
     setErrorColor('red');
     setShowErrorContainer(true); // Show the container
@@ -466,7 +501,7 @@ function App() {
     return listReducedTokens;
   }
 
-  const handleSolutionSelect = (solution) => {
+  const handleSolutionSelect = (solution: string) => {
     setSelectedSolution(solution);
 
     // Replace with your logic to get investment breakdown for the selected solution
@@ -475,7 +510,7 @@ function App() {
   };
 
   // Placeholder function to simulate getting investment breakdown data
-  const getInvestmentBreakdown = (solution, amount) => {
+  const getInvestmentBreakdown = (solution: string, amount: string) => {
     // Replace this with your actual logic to fetch or calculate the breakdown
     // based on the selected solution and investment amount.
     // load tokens data
@@ -587,7 +622,7 @@ function App() {
     return breakdown;
 
   };
-  const handleInvestmentInputChange = (e) => {
+  const handleInvestmentInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     let inputValue = e.target.value;
 
     // Check if input ends with '%' (percentage)
@@ -612,7 +647,7 @@ function App() {
     setBalances(newBalances);
   };
 
-  const handlePercentageSelect = (percentage) => {
+  const handlePercentageSelect = (percentage: number) => {
     let maxAmountToInvest = totalWalletValue - 0;
     let amount = Math.min(totalWalletValue * (percentage / 100), maxAmountToInvest).toFixed(5);
     setInvestmentAmount(amount);
@@ -667,6 +702,18 @@ function App() {
       setErrorWithTimeout(err.message);
     }
   };
+  const handleConnectAptosWallet = async () => {
+    try {
+      console.log("wallet aptos connect...");
+
+    } catch (err) {
+      console.error("Error connecting wallet:", err);
+      setErrorWithTimeout(err.message);
+    }
+  };
+
+
+
   const handleDisconnectWallet = () => {
     // Reset state variables related to the wallet
     setMyWalletAccount(null);
@@ -901,8 +948,6 @@ function App() {
   }, [investmentAmount, selectedSolution]
   );
 
-
-
   useEffect(() => {
     // fetch balance with brian api
     const fetchBalancesWithBrian = async () => {
@@ -955,7 +1000,7 @@ function App() {
       )}
 
       <div className="app-content">
-        <h2>Beta Version - 0.0.1 - Starknet</h2>
+        <h2>Beta Version - 0.0.2 - Starknet & Aptos</h2>
         {walletAddress ? (
           <>
             <h4>Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
@@ -1191,7 +1236,10 @@ function App() {
 
           </>
         ) : (
-          <button onClick={handleConnectWallet}>Connect Wallet</button>
+            <div>
+          <button onClick={handleConnectWallet}>Connect Starknet Wallet</button>
+          <br></br><button onClick={handleConnectAptosWallet}>Connect Aptos Wallet</button>
+          </div>
         )}
       </div>
       {/* Footer */}
