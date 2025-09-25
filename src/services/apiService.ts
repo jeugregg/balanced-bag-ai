@@ -1,5 +1,7 @@
 import { Contract, uint256, RpcProvider } from "starknet";
 import { BrianSDK } from "@brian-ai/sdk";
+import { initHyperionSDK } from '@hyperionxyz/sdk'
+import { Network } from "@aptos-labs/ts-sdk";
 import {
   getMarketTokenAddress,
   getMarketTokenPrice,
@@ -13,9 +15,11 @@ import {
   loadTokens,
 } from "./dataUtils";
 import { TokenData, BalanceItem, InvestmentBreakdown, Swap } from "../App";
+//import { Network } from "@aptos-labs/wallet-adapter-react";
 
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
 const rcpApiKey = import.meta.env.VITE_RCP_API_KEY as string;
+const aptosApiKey = import.meta.env.VITE_APTOS_API_KEY as string;
 export async function getMarket(): Promise<TokenData[] | null> {
   const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', {
     method: 'GET',
@@ -368,23 +372,97 @@ export async function connectAptosWallet(
   setWalletAddress: (address: string) => void,
   setErrorWithTimeout: (msg: string) => void
 ) {
-  try {
-    if (availableWallets.length === 0) {
-      setShowAptosWalletMsg(true);
-      return;
+    try {
+        if (availableWallets.length === 0) {
+            setShowAptosWalletMsg(true);
+            return;
+        }
+        if (aptosWallet.connected === false) {
+            try {
+                await aptosWallet.connect("Petra");
+            } catch (error: any) {
+                setShowAptosWalletMsg(true);
+                return;
+            }
+
+        }
+        const walletAddress = aptosWallet.account.address.toString();
+
+        const sdk = initHyperionSDK({
+            network: Network.MAINNET, 
+            APTOS_API_KEY: aptosApiKey
+        });
+        
+        const poolItems = await sdk.Pool.fetchAllPools();
+        console.log(poolItems)
+        let marketAptos = {};
+        const tokens_default = [
+            {  
+                name:"bitcoin",
+                symbol:"WBTC"
+            },
+            {
+                name:"ethereum",
+                symbol:"WETH"
+            },
+            {
+                name:"aptos",
+                symbol:"APT"
+            },
+            {
+                name:"solana",
+                symbol:"SOL"
+            },
+            {
+                name:"usd-coin",
+                symbol:"USDC"
+            },
+            {
+                name:"tether",
+                symbol:"USDT"
+
+            }
+        ];
+           
+        //const tokens_symbols = ["WBTC", "WETH", "APT", "SOL", "USDC", "USDT"];
+
+        for (const token of tokens_default) {
+            const token_symbol = token["symbol"];
+            const token_id = token["name"];
+            const url = `https://api.coingecko.com/api/v3/simple/price?ids=${token_id}&vs_currencies=usd&include_market_cap=true`;
+            const options = {
+                method: 'GET',
+                headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
+            };
+            const res_cg = await fetch(url, options);
+            const data_cg = await res_cg.json();
+            console.log(data_cg);
+            const index_token = poolItems.findIndex((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
+            console.log(index_token);
+
+            if (index_token != -1) {
+                const pools_token = poolItems.filter((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
+                if (pools_token.length > 1) {
+                    let tvlUSD = 0;
+                    for (const pool of pools_token) {
+                        tvlUSD += parseFloat(pool["tvlUSD"]);
+                    }
+                    if (tvlUSD > 50000) {
+                        marketAptos[token_symbol] = {
+                            currentPrice: data_cg[token_id]["usd"],
+                            marketCap: data_cg[token_id]["usd_market_cap"],
+                            aptosTvl: tvlUSD,
+                        };
+                    };
+                };
+                //poolItems[index_token]["market"]["marketCap"] = data_cg[token_id]["usd_market_cap"];
+            }
+        }
+        console.log(marketAptos);
+        localStorage.setItem('aptosTokens', JSON.stringify(marketAptos));
+        setMyAptosWalletAccount(aptosWallet);
+        setWalletAddress(walletAddress);
+    } catch (err: any) {
+        setErrorWithTimeout(err.message);
     }
-    if (aptosWallet.connected === false) {
-      try {
-        await aptosWallet.connect("Petra");
-      } catch (error: any) {
-        setShowAptosWalletMsg(true);
-        return;
-      }
-    }
-    const walletAddress = aptosWallet.account.address.toString();
-    setMyAptosWalletAccount(aptosWallet);
-    setWalletAddress(walletAddress);
-  } catch (err: any) {
-    setErrorWithTimeout(err.message);
-  }
 }
