@@ -65,6 +65,11 @@ import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-soli
 import { PieChart, Pie, Cell } from 'recharts';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { groupAndSortWallets, WalletName, useWallet, WalletContextState } from "@aptos-labs/wallet-adapter-react";
+import WalletConnectButtons from "./components/WalletConnectButtons";
+import ErrorMessageBox from "./components/ErrorMessageBox";
+import WalletBalances from "./components/WalletBalances";
+import InvestmentBreakdown from "./components/InvestmentBreakdown";
+import SwapTable from "./components/SwapTable";
 
 const mode_debug = false;
 
@@ -1028,53 +1033,13 @@ function App() {
         </i></p>
       </header>
 
-      {showErrorContainer && (
-        <div className={`error-container bottom-right ${showErrorContainer ? 'show' : ''}`}>
-          {/* Add the 'show' class conditionally */}
-          {error && <p style={{ color: errorColor }}>{error}</p>}
-        </div>
-      )}
-
-      {showAptosWalletMsg && (
-        <div className="aptos-wallet-msg-box" style={{
-          position: 'fixed',
-          bottom: '30px',
-          right: '30px',
-          background: '#fff',
-          border: '1px solid #ccc',
-          borderRadius: '8px',
-          padding: '20px',
-          zIndex: 1000,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-        }}>
-          <span
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '12px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '18px'
-            }}
-            onClick={() => setShowAptosWalletMsg(false)}
-            aria-label="Close"
-          >
-            ×
-          </span>
-          <div>
-            <b>Please install Petra wallet extension:</b>
-            <br />
-            <a
-              href="https://chromewebstore.google.com/detail/petra-aptos-wallet/ejjladinnckdgjemekebdpeokbikhfci?hl=en"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#007bff", textDecoration: "underline" }}
-            >
-              https://chromewebstore.google.com/detail/petra-aptos-wallet/ejjladinnckdgjemekebdpeokbikhfci?hl=en
-            </a>
-          </div>
-        </div>
-      )}
+      <ErrorMessageBox
+        showErrorContainer={showErrorContainer}
+        error={error}
+        errorColor={errorColor}
+        showAptosWalletMsg={showAptosWalletMsg}
+        setShowAptosWalletMsg={setShowAptosWalletMsg}
+      />
 
       <div className="app-content">
         <h2>Beta Version - 0.0.2 - Starknet & Aptos</h2>
@@ -1115,49 +1080,18 @@ function App() {
                 <p>Loading balances... {loadingToken}</p>
               </div>
             ) : (
-              <div className="breakdown-container">
-                <div className="breakdown-column">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th className="table-header">Token</th>
-                        <th className="table-header">Quantity</th>
-                        <th className="table-header">Price</th>
-                        <th className="table-header">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {balances.map((item) => (
-                        <tr key={item.token}>
-                          <td>{item.token}</td>
-                          <td>{Number(item.balance).toFixed(5)}</td>
-                          <td>{item.price.toFixed(5)}</td>
-                          <td>{item.total.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="breakdown-column">
-                  <PieChart width={400} height={300} className="breakdown-chart" margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
-                    <Pie
-                      data={pieChartDataBalances} // Use pieChartDataBalances here
-                      cx={150}
-                      cy={150}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                      labelLine={true}
-                      label={({ name, value }) => `${name} ${((value / totalWalletValue) * 100).toFixed(1)}%`} // Calculate percentage
-                    >
-                      {pieChartDataBalances.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </div>
-              </div>
+              <WalletBalances
+                balances={balances}
+                isLoading={isLoading}
+                loadingToken={loadingToken}
+                totalWalletValue={totalWalletValue}
+                walletBalances={walletBalances}
+                investmentAmount={investmentAmount}
+                handleInvestmentInputChange={handleInvestmentInputChange}
+                handlePercentageSelect={handlePercentageSelect}
+                pieChartDataBalances={pieChartDataBalances}
+                COLORS={COLORS}
+              />
             )}
 
             {/* Conditionally display Total Wallet Value */}
@@ -1219,103 +1153,25 @@ function App() {
             {/* Display Investment Breakdown Table */}
             {investmentBreakdown && (
               <>
-                <h4>Your Investment Breakdown</h4>
-                <div className="breakdown-container"> {/* Container for table and chart */}
-                  <div className="breakdown-column"> {/* Column for the table */}
-                    <table className="breakdown-table">
-                      <thead>
-                        <tr>
-                          <th className="table-header">Token</th>
-                          <th className="table-header">Amount ($)</th>
-                          <th className="table-header">Percentage (%)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(investmentBreakdown).map(([token, data]) => (
-                          <tr key={token}>
-                            <td>{token}</td>
-                            <td>{data.amount.toFixed(2)}</td>
-                            <td>{data.percentage.toFixed(1)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="breakdown-column"> {/* Column for the pie chart */}
-                    {/* Pie Chart */}
-                    <PieChart width={400} height={300} className="breakdown-chart" margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
-                      <Pie
-                        data={pieChartData}
-                        cx={150}
-                        cy={150}
-
-                        outerRadius={80}
-                        fill="#8884d8"
-                        paddingAngle={5}
-                        dataKey="value"
-                        labelLine={true}
-                        label={({ name, value }) => `${name} ${value.toFixed(1)}%`}
-                      >
-                        {pieChartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </div>
-                </div> {/* End of breakdown-container */}
-
-                {/* New: Swap Section always displayed if investmentBreakdown exists */}
-                <>
-                  <h3>Swap All for Rebalancing</h3>
-                  <button onClick={handlePrepareSwapTransactions}>Swap All</button>
-                  <h4>Swaps Details</h4>
-                  {/* New: Swap Preparation Table */}
-                  <table className="swaps-table">
-                    <thead>
-                      <tr>
-                        <th className="table-header">Sell Token</th>
-                        <th className="table-header">Buy Token</th>
-                        <th className="table-header">Amount ($)</th>
-                        <th className="table-header">Status</th> {/* New: Status column */}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {swapsToPrepare.map((swap, index) => (
-                        <tr key={index}>
-                          <td>{swap.sell}</td>
-                          <td>{swap.buy}</td>
-                          <td>{swap.amount.toFixed(2)}</td>
-                          <td> {/* New: Status cell */}
-                            {swapStatuses[index] === 'pending' && (
-                              <FontAwesomeIcon icon={faHandSpock} />
-                            )}
-                            {swapStatuses[index] === 'loading' && (
-                              <FontAwesomeIcon icon={faSpinner} spin />
-                            )}
-                            {swapStatuses[index] === 'success' && (
-                              <FontAwesomeIcon icon={faCheck} style={{ color: 'green' }} />
-                            )}
-                            {swapStatuses[index] === 'error' && (
-                              <FontAwesomeIcon icon={faTimes} style={{ color: 'red' }} />
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-
-                </>
-
+                <InvestmentBreakdown
+                  investmentBreakdown={investmentBreakdown}
+                  pieChartData={pieChartData}
+                  COLORS={COLORS}
+                />
+                <SwapTable
+                  swapsToPrepare={swapsToPrepare}
+                  swapStatuses={swapStatuses}
+                  handlePrepareSwapTransactions={handlePrepareSwapTransactions}
+                />
               </>
             )}
 
           </>
         ) : (
-            <div>
-          <button onClick={handleConnectWallet}>Connect Starknet Wallet</button>  -  <button onClick={handleConnectAptosWallet}>Connect Aptos Wallet</button>
-          </div>
+          <WalletConnectButtons
+            handleConnectWallet={handleConnectWallet}
+            handleConnectAptosWallet={handleConnectAptosWallet}
+          />
         )}
       </div>
       {/* Footer */}
