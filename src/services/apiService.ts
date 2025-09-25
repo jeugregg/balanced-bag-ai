@@ -10,11 +10,12 @@ import {
   extractPrices,
   getMarketTokenMcap,
   calculateEMA7HourlyAndMaxStdDev,
+  loadTokens,
 } from "./dataUtils";
 import { TokenData, BalanceItem, InvestmentBreakdown, Swap } from "../App";
 
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
-
+const rcpApiKey = import.meta.env.VITE_RCP_API_KEY as string;
 export async function getMarket(): Promise<TokenData[] | null> {
   const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', {
     method: 'GET',
@@ -99,7 +100,8 @@ export async function fetchBalances(
 ) {
   if (walletAddress && myWalletAccount) {
     let newBalances: Record<string, number> = {};
-    const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno" });
+    //const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno" });
+    const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno", headers: { 'x-apikey': rcpApiKey } }); // Create RpcProvider
     const tokenAddresses = getMarketTokenAddress();
     const tokenPrices = getMarketTokenPrice();
     try {
