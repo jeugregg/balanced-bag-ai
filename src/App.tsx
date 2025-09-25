@@ -57,14 +57,12 @@
 
 import React, { useState, useEffect, useRef, ChangeEvent } from "react";
 import './App.css';
-import { Contract, WalletAccount, uint256, RpcProvider } from "starknet";
-import { connect } from '@starknet-io/get-starknet';
+import { WalletAccount } from "starknet";
 import { BrianSDK } from "@brian-ai/sdk";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-solid-svg-icons';
-import { PieChart, Pie, Cell } from 'recharts';
+import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
-import { groupAndSortWallets, WalletName, useWallet, WalletContextState } from "@aptos-labs/wallet-adapter-react";
+import { groupAndSortWallets, useWallet, WalletContextState } from "@aptos-labs/wallet-adapter-react";
 import WalletConnectButtons from "./components/WalletConnectButtons";
 import ErrorMessageBox from "./components/ErrorMessageBox";
 import WalletBalances from "./components/WalletBalances";
@@ -79,6 +77,8 @@ import {
   handlePrepareSwapTransactions,
   handleSwapPrepare,
   getInvestmentBreakdown,
+  connectStarknetWallet,
+  connectAptosWallet,
 } from "./services/apiService";
 
 const mode_debug = false;
@@ -224,84 +224,26 @@ function App() {
     setBalances(newBalances);
   };
   const handleConnectWallet = async () => {
-    try {
-      console.log("enter");
-      const selectedWalletSWO = await connect({ modalMode: "alwaysAsk", modalTheme: "light" });
-      console.log("selectedWalletSWO:");
-      console.log(selectedWalletSWO);
-      const newWalletAccount = new WalletAccount(
-        {
-          nodeUrl: "https://rpc.nethermind.io/mainnet-juno",
-          headers: { 'x-apikey': rcpApiKey }
-        },
-        selectedWalletSWO
-      );
-      await newWalletAccount.requestAccounts();
-      console.log("myWalletAccount:");
-      console.log(newWalletAccount);
-      //const bl = await myWalletAccount.getBlockNumber();
-      //console.log("block n°:" + bl);
-      console.log("address:");
-      const walletAddress = newWalletAccount.address;
-      console.log(walletAddress);
-      setWalletAddress(walletAddress);
-      setMyWalletAccount(newWalletAccount);
-      // retrieve avnu market
-      if (mode_debug !== true) {
-        const market = await getMarket();
-        if (market == null) {
-          setErrorWithTimeout("No price feed");
-        }
-        console.log("market:");
-        console.log(market);
-      }
-      // get a reduced list without liquid staking tokens, correleted coins, or stable coins
-      const listReducedTokens = await askReduceList();
-      console.log("listReducedTokens:");
-      console.log(listReducedTokens);
-
-    } catch (err) {
-      console.error("Error connecting wallet:", err);
-      setErrorWithTimeout(err.message);
-    }
+    await connectStarknetWallet(
+      rcpApiKey,
+      setWalletAddress,
+      setMyWalletAccount,
+      setErrorWithTimeout,
+      mode_debug,
+      getMarket,
+      askReduceList
+    );
   };
   const handleConnectAptosWallet = async () => {
-    try {
-      console.log("wallet aptos connect...");
-      console.log("Connected Aptos wallet:", aptosWallet.connected);
-      console.log("Available Aptos wallets:", availableWallets);
-      console.log("Installable Aptos wallets:", installableWallets);
-      if (availableWallets.length === 0) {
-        setShowAptosWalletMsg(true);
-        return;
-      }
-      // You can use aptosWallet.connect() or other methods here if needed
-      if (aptosWallet.connected === false) {
-        try {
-            // Change below to the desired wallet name instead of "Petra"
-            await aptosWallet.connect("Petra" as WalletName<"Petra">);
-            console.log('Connected to wallet:', aptosWallet.account.address.toString());
-        } catch (error) {
-            console.error('Failed to connect to wallet:', error);
-            setShowAptosWalletMsg(true);
-            return;
-        }
-      } else {
-        const walletAddress = aptosWallet.account.address.toString();
-        console.log('Already connected to wallet:', walletAddress);
-        setMyAptosWalletAccount(aptosWallet);
-        setWalletAddress(walletAddress);
-
-      }
-
-
-    } catch (err) {
-      console.error("Error connecting wallet:", err);
-      setErrorWithTimeout((err as Error).message);
-    }
+    await connectAptosWallet(
+      aptosWallet,
+      availableWallets,
+      setShowAptosWalletMsg,
+      setMyAptosWalletAccount,
+      setWalletAddress,
+      setErrorWithTimeout
+    );
   };
-
-
 
   const handleDisconnectWallet = () => {
     // Reset state variables related to the wallet
