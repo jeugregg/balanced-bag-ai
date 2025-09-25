@@ -75,29 +75,11 @@ import InvestmentStrategyButtons from "./components/InvestmentStrategyButtons";
 import {
   getMarket,
   askReduceList,
-  fetchBalancesWithBrian,
   fetchBalances,
   handlePrepareSwapTransactions,
   handleSwapPrepare,
   getInvestmentBreakdown,
 } from "./services/apiService";
-import {
-  findIndexBySymbol,
-  getMarketTokenSymbol,
-  getMarketTokenAddress,
-  getMarketTokenPrice,
-  extractPrices,
-  loadTokens,
-  getMarketTokenMcap,
-  filterTokens,
-  removeTokensWithSuffix,
-  calculateCryptoDelta,
-  calculateCryptoSwap,
-  extractBrianBalances,
-  extractAllBrianBalances,
-  calculateEMA7HourlyAndMaxStdDev,
-  reduceTokenList,
-} from "./services/dataUtils";
 
 const mode_debug = false;
 
@@ -196,171 +178,13 @@ function App() {
     }, 5000);
   };
 
-  const askReduceList = async () => {
-    // Ask BRIAN AI to reduce token list by excluded :
-    // - stable coins, 
-    // - liquid staking tokens,
-    // - and correletated coins
-    const tokens = loadTokens();
-    // transform tokens symbols in list of string with '' :
-    const symbols = tokens.map((token) => token.symbol);
-    let prompt = `From this list of assets on Starknet and particularly on app.avnu.fi : '${symbols.join("', '")}`;
-    prompt += "' extract a new list by removing stablecoins when you are sure that it is a stablecoin. Don't explain your answer, just write the new list"
-    const result = await brian.ask({
-      prompt: prompt,
-      kb: "public-knowledge-box",
-    });
-    console.log("result stablecoin: ")
-    console.log(result["answer"]);
-    prompt = "From this list of assets on Starknet and particularly on app.avnu.fi :"
-    prompt += result["answer"];
-    prompt += ", extract a new list by removing liquid staking tokens only when you are sure that it is a liquid staking token.";
-    prompt += " Don't explain your answer, just write the new list"
-    const result_lst = await brian.ask({
-      prompt: prompt,
-      kb: "public-knowledge-box",
-    });
-    console.log("result lst: ")
-    console.log(result_lst["answer"]);
-    // for each symbol of tokens, check if the symbol is into long string result
-    let listReducedTokens = [];
-    for (const symbol of symbols) {
-      if (result_lst["answer"].includes(`'${symbol}'`)) {
-        listReducedTokens.push(symbol);
-      }
-    }
-    console.log("listReducedTokens identified: ");
-    console.log(listReducedTokens);
-    // remove tokens with STRK suffix
-    listReducedTokens = removeTokensWithSuffix(listReducedTokens, "STRK");
-    console.log("listReducedTokens after STRK suffixes removed: ")
-    console.log(listReducedTokens);
-    // save in localstorage
-    localStorage.setItem('listReducedTokens', JSON.stringify(listReducedTokens));
-    return listReducedTokens;
-  }
-
   const handleSolutionSelect = (solution: string) => {
     setSelectedSolution(solution);
-
-    // Replace with your logic to get investment breakdown for the selected solution
-    const breakdown = getInvestmentBreakdown(solution, investmentAmount);
+    const breakdown = getInvestmentBreakdown(solution, parseFloat(investmentAmount));
     setInvestmentBreakdown(breakdown);
   };
 
-  // Placeholder function to simulate getting investment breakdown data
-  const getInvestmentBreakdown = (solution: string, amount: string) => {
-    // Replace this with your actual logic to fetch or calculate the breakdown
-    // based on the selected solution and investment amount.
-    // load tokens data
-    const tokensData = loadTokens();
-    // keep only good token 
-    const goodTokensData = filterTokens(tokensData);
-    console.log("filterTokens: ");
-    console.log(goodTokensData);
-    // select first biggest Market Cap
-    let tokenMcaps = getMarketTokenMcap(goodTokensData);
-    // sort by Market Cap
-    let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
-    // keep only 10th first
-    sortedTokens = sortedTokens.slice(0, 15);
-    let sortedTokensData = filterTokens(goodTokensData, sortedTokens);
-    // get token actual prices
-    const tokenPrices = getMarketTokenPrice(sortedTokensData);
-    // get statistics about tokens
-    let tokenEMA7Hourly = {};
-    let tokenMaxStdDev = {};
-    for (const token of sortedTokens) {
-      const tokenPriceHistory = extractPrices(sortedTokensData, token);
-      try {
-        const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
-        tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
-        tokenMaxStdDev[token] = tokenEMA7HourlyAndMaxStdDev.maxStdDev;
-        // detect stablecoin and exclude them
-        if (tokenMaxStdDev[token] < 2) {
-          if (tokenPrices[token] < 1.07 && tokenPrices[token] > 0.93) {
-            delete tokenEMA7Hourly[token];
-            delete tokenMaxStdDev[token];
-            sortedTokens = sortedTokens.filter(t => t !== token);
-          }
-        }
-      } catch (error) {
-        console.error(`Error calculating EMA and MaxStdDev for ${token}:`, error);
-        setErrorWithTimeout(error.message);
-        return null;
-      }
-    }
-    // Hyperparameters Solution Selection 
-    // def Balanced
-    let k_alpha = 0.75;
-    let k_mini = 0.03;
-    let n_tokens = 10;
-    if (solution === 'Secure') {
-      k_alpha = 0.8;
-      k_mini = 0.03;
-      n_tokens = 5;
-    } else if (solution === 'Offensive') {
-      k_alpha = 0.5;
-      k_mini = 0.03;
-      n_tokens = 10;
-    };
 
-    // reduce number of tokens to n_tokens
-    sortedTokens = sortedTokens.slice(0, n_tokens);
-    // Create a new tokenEMA7Hourly object in the order of sortedTokens
-    tokenEMA7Hourly = Object.fromEntries(
-      sortedTokens.map(token => [token, tokenEMA7Hourly[token]])
-    );
-
-    // Apply the same logic to tokenMaxStdDev
-    tokenMaxStdDev = Object.fromEntries(
-      sortedTokens.map(token => [token, tokenMaxStdDev[token]])
-    );
-    sortedTokensData = filterTokens(sortedTokensData, sortedTokens);
-    console.log("sortedTokens:");
-    console.log(sortedTokens);
-    // calculate % distribution per assets
-    // approx: EMA7D(Mcap) = Mcap(Today) * EMA7D(Price) / Price(Today)
-    // approx alpha to have 3% for the last asset with smallest Mcap
-    const alpha = k_alpha * Math.log(k_mini) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]))
-    // take sqrt of EMA7Hourly
-    let tokenDistribution = {};
-    for (const token in tokenEMA7Hourly) {
-      tokenDistribution[token] = Math.pow(tokenMcaps[token] * tokenEMA7Hourly[token] / tokenPrices[token], alpha);
-    }
-    // calculate totalEma7Hourly
-    const totalDistribution = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
-    // calculate % distribution per assets
-    for (const token in tokenEMA7Hourly) {
-      tokenDistribution[token] = tokenDistribution[token] / totalDistribution;
-    }
-
-    // check sum of tokenDistribution == 1 
-    const sum = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
-    if (sum < 1.001 && sum > 0.999) {
-      console.log("sum: " + sum);
-      console.error("Sum of tokenDistribution is not 1");
-
-    }
-    console.log("tokenDistribution:");
-    console.log(tokenDistribution);
-    console.log("tokenEMA7Hourly:");
-    console.log(tokenEMA7Hourly);
-    console.log("tokenMaxStdDev:");
-    console.log(tokenMaxStdDev);
-
-    // Create investment breakdown based on tokenDistribution
-    let breakdown = {};
-
-    for (const token in tokenDistribution) {
-      breakdown[token] = {
-        amount: tokenDistribution[token] * amount,
-        percentage: tokenDistribution[token] * 100
-      };
-    }
-    return breakdown;
-
-  };
   const handleInvestmentInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     let inputValue = e.target.value;
 
@@ -515,93 +339,20 @@ function App() {
   };
 
 
-  const handleSwapPrepare = () => {
-    // Create currentWallet and targetWallet objects for calculateCryptoSwap
-    const currentWallet = balances.reduce((acc, item) => ({ ...acc, [item.token]: parseFloat(item.total) }), {});
-    const targetWallet = {};
-    for (const token in investmentBreakdown) {
-      targetWallet[token] = parseFloat(investmentBreakdown[token].amount);
-    }
-
-    // Calculate the swaps needed using the new function
-    const swapAmounts = calculateCryptoDelta(currentWallet, targetWallet);
-    // Generate the list of swaps to prepare based on swapAmounts
-    const swaps = calculateCryptoSwap(swapAmounts);
-
-    setSwapsToPrepare(swaps);
-  };
-
-  const handlePrepareSwapTransactions = async () => {
-    setTransactionsCompleted(false); // Reset transactionsCompleted state
-    const newSwapStatuses = swapsToPrepare.map(() => 'pending'); // Set initial status to loading
-    setSwapStatuses(newSwapStatuses);
-
-    let allTransactionsSuccessful = true;
-    for (let i = 0; i < swapsToPrepare.length; i++) {
-      newSwapStatuses[i] = 'loading'; // Update status to loading before execution
-      setSwapStatuses([...newSwapStatuses]);
-      const swap = swapsToPrepare[i];
-      const prompt = `Swap $${swap.amount.toFixed(2)} worth of '${swap.sell}' to '${swap.buy}' on Starknet`;
-      console.log(`Sending prompt to Brian: ${prompt}`);
-
-      try {
-        const brianResponse = await brian.transact({
-          prompt: prompt,
-          address: walletAddress,
-        });
-
-        console.log("Brian's Response:", brianResponse);
-
-        // Check Brian's extractedParams
-        if ((Number(brianResponse[0]["data"]["toAmountUSD"]) - Number(brianResponse[0]["data"]["fromAmountUSD"])) / Number(brianResponse[0]["data"]["fromAmountUSD"]) < -0.01) {
-          console.error(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}:`);
-          setErrorWithTimeout(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}`);
-          newSwapStatuses[i] = 'error'; // Set status to error
-          setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
-          continue; // Skip to the next swap
-        }
-
-        const extractedParams = brianResponse[0]["extractedParams"];
-        if (
-          extractedParams &&
-          extractedParams.action === "swap" &&
-          extractedParams.chain === "Starknet" &&
-          extractedParams.token1 === swap.sell &&
-          extractedParams.token2 === swap.buy
-        ) {
-          console.log("Swap successfully prepared:", extractedParams);
-          const txSteps = brianResponse[0]["data"]["steps"];
-
-          const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
-          await myWalletAccount.waitForTransaction(transferTxHash);
-          console.log("transaction_hash:", transferTxHash);
-          console.log("End Tx execution.");
-
-          newSwapStatuses[i] = 'success'; // Set status to success
-          setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
-        } else {
-          console.error("Unexpected response from Brian:", extractedParams);
-          setErrorWithTimeout("Unexpected response from Brian. Please check the console.");
-          newSwapStatuses[i] = 'error'; // Set status to error
-          setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
-        }
-
-      } catch (error) {
-        console.error(`Error preparing swap for ${swap.sell} to ${swap.buy}:`, error);
-        setErrorWithTimeout(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
-        allTransactionsSuccessful = false;
-        newSwapStatuses[i] = 'error'; // Set status to error
-        setSwapStatuses([...newSwapStatuses]); // Update swapStatuses state
-      }
-    }
-
-    // Update transactionsCompleted state based on allTransactionsSuccessful flag
-    setTransactionsCompleted(allTransactionsSuccessful);
-  };
-
   useEffect(() => {
-    fetchBalances(walletAddress, myWalletAccount, setWalletBalances, setBalances, setTotalWalletValue, setInvestmentAmount, setIsLoading, setLoadingToken, setErrorWithTimeout);
-    //fetchBalancesWithBrian(walletAddress, myWalletAccount, setBalancesWithBrian, setErrorWithTimeout);
+    fetchBalances(
+      walletAddress,
+      myWalletAccount,
+      setWalletBalances,
+      setBalances,
+      setTotalWalletValue,
+      setInvestmentAmount,
+      setIsLoading,
+      setLoadingToken,
+      setErrorWithTimeout
+    );
+    // Optionally, fetch Brian balances:
+    // fetchBalancesWithBrian(walletAddress, myWalletAccount, setBalancesWithBrian, setErrorWithTimeout);
   }, [walletAddress, myWalletAccount]);
 
   useEffect(() => {
@@ -663,34 +414,7 @@ function App() {
   );
 
   useEffect(() => {
-    // fetch balance with brian api
-    const fetchBalancesWithBrian = async () => {
-      if (walletAddress && myWalletAccount) {
-        const tokenSymbols = getMarketTokenSymbol();
-        console.log("tokenSymbols:");
-        console.log(tokenSymbols);
-        let str_prompt_tokens = "Get wallet balance in ";
-        for (const token in tokenSymbols) {
-          // concat all symbols in one string
-          str_prompt_tokens += tokenSymbols[token] + ", ";
-        }
-        str_prompt_tokens += "on Starknet";
-        console.log(str_prompt_tokens);
-
-        const brianBalances = await brian.transact({
-          prompt: str_prompt_tokens,
-          "address": walletAddress
-        });
-
-        const newBrianBalances = extractAllBrianBalances(brianBalances);
-
-        setBalancesWithBrian(newBrianBalances);
-      }
-
-    };
-
     fetchBalances();
-    //fetchBalancesWithBrian();
   }, [walletAddress, myWalletAccount]);
 
   return (
