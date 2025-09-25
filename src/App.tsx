@@ -70,6 +70,27 @@ import ErrorMessageBox from "./components/ErrorMessageBox";
 import WalletBalances from "./components/WalletBalances";
 import InvestmentBreakdown from "./components/InvestmentBreakdown";
 import SwapTable from "./components/SwapTable";
+import {
+  getMarket,
+  askReduceList,
+} from "./services/apiService";
+import {
+  findIndexBySymbol,
+  getMarketTokenSymbol,
+  getMarketTokenAddress,
+  getMarketTokenPrice,
+  extractPrices,
+  loadTokens,
+  getMarketTokenMcap,
+  filterTokens,
+  removeTokensWithSuffix,
+  calculateCryptoDelta,
+  calculateCryptoSwap,
+  extractBrianBalances,
+  extractAllBrianBalances,
+  calculateEMA7HourlyAndMaxStdDev,
+  reduceTokenList,
+} from "./services/dataUtils";
 
 const mode_debug = false;
 
@@ -118,310 +139,6 @@ const tokenAddresses_default: Record<string, string> = {
 };
 
 const ethAmountToKeep = 2;
-
-function findIndexBySymbol(data: TokenData[], symbol_search: string): number {
-  for (let i = 0; i < data.length; i++) {
-    if (data[i].symbol === symbol_search) {
-      return i;
-    }
-  }
-  return -1; // Return -1 if symbol not found
-}
-
-async function getMarket(): Promise<TokenData[] | null> {
-  const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', {
-    method: 'GET',
-    headers: {},
-  });
-  // example : data[0] =
-  // {position: 1, name: 'Ethereum', symbol: 'ETH', address: '0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7', decimals: 18, …}
-
-  const data = await response.json();
-
-  // Check if data is valid JSON before storing
-  if (typeof data === 'object') {
-    try {
-      // patch "8"  
-      const index_8 = findIndexBySymbol(data, "\b8");
-      if (index_8 != -1) {
-        data[index_8].symbol = "8";
-      }
-      // patch "SCHIZODIO "
-      const index_SCHIZODIO = findIndexBySymbol(data, "SCHIZODIO ");
-      if (index_SCHIZODIO != -1) {
-        data[index_SCHIZODIO].symbol = "SCHIZODIO";
-        data[index_SCHIZODIO].name = "SCHIZODIO";
-      }
-      // WBTC : get BTC Mcap
-      const url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true';
-      const options = {
-        method: 'GET',
-        headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
-      };
-      const res_cg = await fetch(url, options);
-      const data_cg = await res_cg.json();
-      const index_WBTC = findIndexBySymbol(data, "WBTC");
-      if (index_WBTC != -1) {
-        data[index_WBTC]["market"]["marketCap"] = data_cg["bitcoin"]["usd_market_cap"];
-      }
-
-      localStorage.setItem('starknetTokens', JSON.stringify(data));
-      console.log('Starknet tokens saved to localStorage.');
-      return data;
-    } catch (error) {
-      console.error('Error saving Starknet tokens to localStorage:', error);
-    }
-  } else {
-    console.error('Invalid JSON data received from API.');
-  }
-  return null;
-}
-
-function getMarketTokenSymbol(tokens: TokenData[] | null = null): string[] {
-  // get all token symbol 
-  // tokens is a list of data like that : 
-  // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
-  //const tokenSymbols = tokens.map(token => token.symbol).filter(symbol => symbol != "\b8");
-  if (tokens === null) {
-    tokens = loadTokens();
-  }
-  const tokenSymbols = tokens.map(token => token.symbol);
-  return tokenSymbols;
-}
-
-function getMarketTokenAddress(tokens: TokenData[] | null = null): Record<string, string> {
-  // get all token address from localstorage
-  if (tokens === null) {
-    tokens = loadTokens();
-  }
-  // get all token symbol 
-  // tokens is a list of data like that : 
-  // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7","decim...
-  // return structure  {token1:  address1, token2: address2...} 
-  //let tokenAddresses = tokens.map(token => ({[token.symbol]: token.address}));
-  const tokenAddresses = tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.address }), {});
-  return tokenAddresses;
-}
-
-function getMarketTokenPrice(tokens: TokenData[] | null = null): Record<string, number> {
-  // get all token price from localstorage
-  if (tokens === null) {
-    tokens = loadTokens();
-  }
-  // get all token symbol 
-  // tokens is a list of data like that : 
-  // {"position":1,"name":"Ethereum","symbol":"ETH","address":"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741B1562B82f9e004dc7","decim...
-  // return structure  {token1:  address1, token2: address2...} 
-  //let tokenPrices = tokens.map(token => ({[token.symbol]: token.market.currentPrice}));
-  const tokenPrices = tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.market.currentPrice }), {});
-  return tokenPrices;
-}
-
-function extractPrices(data: TokenData[], tokenSymbol: string): number[] {
-  if (!data || data.length === 0) {
-    return [];
-  }
-
-  // Find the token data based on the symbol
-  const tokenData = data.find(token => token.symbol === tokenSymbol);
-
-  if (!tokenData || !tokenData.linePriceFeedInUsd) {
-    return [];
-  }
-
-  return tokenData.linePriceFeedInUsd.map(priceData => priceData.value);
-}
-
-function loadTokens(): TokenData[] {
-  const storedTokens = localStorage.getItem('starknetTokens');
-  const tokens = JSON.parse(storedTokens);
-  return tokens;
-}
-function getMarketTokenMcap(tokens: TokenData[] | null = null): Record<string, number> {
-  // get Market Cap from localstorage
-  if (tokens === null) {
-    tokens = loadTokens();
-  }
-
-  const tokenMcaps = tokens.reduce((acc, token) => ({
-    ...acc,
-    [token.symbol]: token.market.marketCap === 0 ? token.market.starknetTvl : token.market.marketCap
-  }), {});
-
-  return tokenMcaps;
-}
-
-// Assuming brianBalances is an array of objects returned by the Brian API
-function extractBrianBalances(brianBalance: any): Record<string, number> | 0 {
-  if (!brianBalance || brianBalance.length === 0) {
-    return 0; // No balances to check
-  }
-
-  const extractedParams = brianBalance["extractedParams"];
-  if (!extractedParams) {
-    return 0; // No extractedParams found
-  }
-
-  if (
-    extractedParams.action === "balance" &&
-    extractedParams.chain === "Starknet"
-  ) {
-    const token = brianBalance["extractedParams"]["token1"];
-    const balance = parseFloat(brianBalance["data"]["formattedValue"]);
-    // return a structure {token: balance}
-    return { [token]: balance };
-  }
-}
-
-function extractAllBrianBalances(brianBalances: any[]): Record<string, number>[] | 0 {
-  if (!brianBalances || brianBalances.length === 0) {
-    return 0; // No balances to check
-  }
-  // for all elems in brianBalances get token balanc into a structure
-  // use token symbol as key, and balance as value, list of structure
-  // use extractBrianBalances for each elem in brianBalances
-  const extractedBalances = [];
-  for (const brianBalance of brianBalances) {
-    const balance = extractBrianBalances(brianBalance);
-    if (balance !== 0) {
-      const symbol = brianBalance["extractedParams"]["symbol"];
-      // append balance structure to array extractedBalances
-      extractedBalances.push(balance);
-      //extractedBalances[symbol] = balance;
-    }
-  }
-  return extractedBalances;
-}
-
-function calculateEMA7HourlyAndMaxStdDev(prices: number[]): { ema: number, maxStdDev: number } {
-  let length = prices.length;
-  if (length < 168) {
-    if (length < 1) {
-      throw new Error("EMA7 need more longer prices history");
-    }
-  }
-
-  // Définir le multiplicateur
-  const multiplier = 2 / (length + 1);
-
-  // Calculer l'EMA en parcourant les prix du plus récent au plus ancien
-  let ema = prices[length - 1];
-  let lastWeekEMAs = [ema];
-
-  for (let i = length - 2; i >= 0; i--) {
-    ema = prices[i] * multiplier + ema * (1 - multiplier);
-    lastWeekEMAs.unshift(ema);
-    if (lastWeekEMAs.length > 168) {
-      lastWeekEMAs.pop();
-    }
-  }
-
-  // Calculer la variance maximale des 168 dernières MME
-  const meanEMA = lastWeekEMAs.reduce((sum, value) => sum + value, 0) / length;
-  const maxStdDev = Math.sqrt(Math.max(...lastWeekEMAs.map(value => Math.pow(value - meanEMA, 2)))) / meanEMA * 100;
-
-  return { ema, maxStdDev };
-}
-
-const reduceTokenList = (tokens: TokenData[]): string[] => {
-  // reduce list of tokens by removing ???
-  // TODO : make it better
-  const uniqueTokens = {};
-  for (const token of tokens) {
-    const symbol = token.symbol;
-    for (let i = 0; i <= symbol.length - 3; i++) {
-      const shortSymbol = symbol.slice(i, i + 3);
-      if (!uniqueTokens[shortSymbol] || symbol.length < uniqueTokens[shortSymbol].length) {
-        uniqueTokens[shortSymbol] = token;
-      }
-    }
-  }
-  const filteredTokens = Object.values(uniqueTokens);
-  const listReducedTokens = filteredTokens.map((token) => token.symbol);
-  return listReducedTokens;
-};
-
-function removeTokensWithSuffix(tokens: string[], suffix: string): string[] {
-  return tokens.filter(token => !token.endsWith(suffix) || token === suffix);
-}
-
-function filterTokens(tokens: TokenData[], listReducedTokensInput: string[] | null = null): TokenData[] {
-  // if listReducedTokensInput is not null, use it
-  if (listReducedTokensInput) {
-    const goodTokens = tokens.filter(token => {
-      return listReducedTokensInput.includes(token.symbol) && !listReducedTokensInput.some(reducedToken => token.symbol !== reducedToken && token.symbol.includes(reducedToken));
-    });
-    return goodTokens;
-  }
-
-  // if listReducedTokensInput is null, use localStorage
-  const listReducedTokensString = localStorage.getItem('listReducedTokens');
-  // if data in LocalStorage
-  if (listReducedTokensString) {
-    const listReducedTokens = JSON.parse(listReducedTokensString);
-    const goodTokens = tokens.filter(token => {
-      return listReducedTokens.includes(token.symbol) && !listReducedTokens.some(reducedToken => token.symbol !== reducedToken && token.symbol.includes(reducedToken));
-    });
-    return goodTokens;
-  }
-  // if no data in LocalStorage, return all tokens
-  return tokens;
-}
-
-function calculateCryptoDelta(currentWallet: Record<string, number>, targetWallet: Record<string, number>): Record<string, number> {
-  const deltaTransactions = {};
-
-  // Create a unique list of tokens (no duplicates)
-  const allTokens = new Set([...Object.keys(currentWallet), ...Object.keys(targetWallet)]);
-
-  for (const token of allTokens) {
-    const targetAmount = targetWallet[token] || 0;
-    const currentAmount = currentWallet[token] || 0;
-
-    const difference = targetAmount - currentAmount;
-    deltaTransactions[token] = difference;
-  }
-
-  return deltaTransactions;
-}
-
-function calculateCryptoSwap(deltaTransactions: Record<string, number>): Swap[] {
-  // with deltaTransactions, create a swaps array with token sell, token buy, amount
-  // loop if all deltaTransactions is not zero 
-  // use deltaTransactions to take the lowest and the highest amount 
-  // create a swap entry : buy, sell, amount
-  const swaps = [];
-
-  // Convert deltaTransactions to an array for easier sorting
-  const deltaArray = Object.entries(deltaTransactions).map(([token, amount]) => ({ token, amount }));
-
-  while (deltaArray.some(({ amount }) => Math.abs(amount) > 1)) {
-    // Sort by absolute amount to find biggest sell and buy
-    deltaArray.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
-
-    const biggestSell = deltaArray.find(({ amount }) => amount < 0);
-    const biggestBuy = deltaArray.find(({ amount }) => amount > 0);
-
-    if (!biggestSell || !biggestBuy) {
-      // This shouldn't happen if the sum of deltas is 0, but it's a safety check
-      break;
-    }
-
-    const swapAmount = Math.min(Math.abs(biggestSell.amount), biggestBuy.amount);
-
-    swaps.push({
-      sell: biggestSell.token,
-      buy: biggestBuy.token,
-      amount: Math.max(0, swapAmount - 0.1),
-    });
-
-    biggestSell.amount += swapAmount;
-    biggestBuy.amount -= swapAmount;
-  }
-
-  return swaps;
-}
-
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState<WalletAccount | null>(null);
