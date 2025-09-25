@@ -70,6 +70,8 @@ import ErrorMessageBox from "./components/ErrorMessageBox";
 import WalletBalances from "./components/WalletBalances";
 import InvestmentBreakdown from "./components/InvestmentBreakdown";
 import SwapTable from "./components/SwapTable";
+import BrianBalancesTable from "./components/BrianBalancesTable";
+import InvestmentStrategyButtons from "./components/InvestmentStrategyButtons";
 import {
   getMarket,
   askReduceList,
@@ -815,59 +817,13 @@ function App() {
             {totalWalletValue > 0 && (
               <p>Total Wallet Value: ${totalWalletValue.toFixed(5)}</p>
             )}
-            {/* display only if brianBalances is not empty */}
-            {balancesWithBrian && Object.keys(balancesWithBrian).length > 0 && (
-              <>
-                <h3>Table by Brian AI</h3> {/* New table */}
-                <table>
-                  <thead>
-                    <tr>
-                      <th className="table-header">Asset</th>
-                      <th className="table-header">Quantity</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(balancesWithBrian || {}).map(([token, balance]) => (
-                      <tr key={token}>
-                        <td>{token}</td>
-                        <td>{balance || "0"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {/* Conditionally display Investment Solution Section */}
-            {!isLoading && totalWalletValue > 0 && (
-              <>
-                <h3>Choose Your Investment Strategy</h3> {/* New section title */}
-                <div>
-                  <button
-                    title="A conservative approach that prioritizes stability and low risk. This strategy allocates a larger portion of your portfolio to stablecoins and low-volatility assets."
-                    className={`investment-button ${selectedSolution === 'Secure' ? 'selected' : ''}`}
-                    onClick={() => handleSolutionSelect('Secure')}
-                  >
-                    Secure
-                  </button>
-                  <button
-                    title="A balanced approach that balances risk and returns. This strategy allocates an equal portion of your portfolio to both stablecoins and high-volatility assets."
-                    className={`investment-button ${selectedSolution === 'Balanced' ? 'selected' : ''}`}
-                    onClick={() => handleSolutionSelect('Balanced')}
-                  >
-                    Balanced
-                  </button>
-                  <button
-                    title="An aggressive approach that prioritizes high returns and is willing to take on higher risk. This strategy allocates a larger portion of your portfolio to higher-risk assets, such as cryptocurrencies with high growth potential."
-                    className={`investment-button ${selectedSolution === 'Offensive' ? 'selected' : ''}`}
-                    onClick={() => handleSolutionSelect('Offensive')}
-                  >
-                    Offensive
-                  </button>
-                </div>
-              </>
-            )}
-            {/* Display Investment Breakdown Table */}
+            <BrianBalancesTable balancesWithBrian={balancesWithBrian} />
+            <InvestmentStrategyButtons
+              isLoading={isLoading}
+              totalWalletValue={totalWalletValue}
+              selectedSolution={selectedSolution}
+              handleSolutionSelect={handleSolutionSelect}
+            />
             {investmentBreakdown && (
               <>
                 <InvestmentBreakdown
