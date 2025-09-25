@@ -323,3 +323,68 @@ export function getInvestmentBreakdown(
   }
   return breakdown;
 }
+
+export async function connectStarknetWallet(
+  rcpApiKey: string,
+  setWalletAddress: (address: string) => void,
+  setMyWalletAccount: (account: any) => void,
+  setErrorWithTimeout: (msg: string) => void,
+  mode_debug: boolean,
+  getMarket: () => Promise<any>,
+  askReduceList: () => Promise<any>
+) {
+  try {
+    const { connect } = await import('@starknet-io/get-starknet');
+    const { WalletAccount } = await import("starknet");
+    const selectedWalletSWO = await connect({ modalMode: "alwaysAsk", modalTheme: "light" });
+    const newWalletAccount = new WalletAccount(
+      {
+        nodeUrl: "https://rpc.nethermind.io/mainnet-juno",
+        headers: { 'x-apikey': rcpApiKey }
+      },
+      selectedWalletSWO
+    );
+    await newWalletAccount.requestAccounts();
+    const walletAddress = newWalletAccount.address;
+    setWalletAddress(walletAddress);
+    setMyWalletAccount(newWalletAccount);
+    if (!mode_debug) {
+      const market = await getMarket();
+      if (market == null) {
+        setErrorWithTimeout("No price feed");
+      }
+    }
+    await askReduceList();
+  } catch (err: any) {
+    setErrorWithTimeout(err.message);
+  }
+}
+
+export async function connectAptosWallet(
+  aptosWallet: any,
+  availableWallets: any[],
+  setShowAptosWalletMsg: (show: boolean) => void,
+  setMyAptosWalletAccount: (account: any) => void,
+  setWalletAddress: (address: string) => void,
+  setErrorWithTimeout: (msg: string) => void
+) {
+  try {
+    if (availableWallets.length === 0) {
+      setShowAptosWalletMsg(true);
+      return;
+    }
+    if (aptosWallet.connected === false) {
+      try {
+        await aptosWallet.connect("Petra");
+      } catch (error: any) {
+        setShowAptosWalletMsg(true);
+        return;
+      }
+    }
+    const walletAddress = aptosWallet.account.address.toString();
+    setMyAptosWalletAccount(aptosWallet);
+    setWalletAddress(walletAddress);
+  } catch (err: any) {
+    setErrorWithTimeout(err.message);
+  }
+}
