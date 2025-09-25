@@ -1,5 +1,17 @@
+import { Contract, uint256, RpcProvider } from "starknet";
 import { BrianSDK } from "@brian-ai/sdk";
-import { TokenData } from "../App";
+import {
+  getMarketTokenAddress,
+  getMarketTokenPrice,
+  calculateCryptoDelta,
+  calculateCryptoSwap,
+  extractAllBrianBalances,
+  filterTokens,
+  extractPrices,
+  getMarketTokenMcap,
+  calculateEMA7HourlyAndMaxStdDev,
+} from "./dataUtils";
+import { TokenData, BalanceItem, InvestmentBreakdown, Swap } from "../App";
 
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
 
@@ -72,4 +84,240 @@ export async function askReduceList(brian: BrianSDK): Promise<string[]> {
   listReducedTokens = listReducedTokens.filter(token => !token.endsWith("STRK") || token === "STRK");
   localStorage.setItem('listReducedTokens', JSON.stringify(listReducedTokens));
   return listReducedTokens;
+}
+
+export async function fetchBalances(
+  walletAddress: string | null,
+  myWalletAccount: any,
+  setWalletBalances: (balances: BalanceItem[]) => void,
+  setBalances: (balances: BalanceItem[]) => void,
+  setTotalWalletValue: (value: number) => void,
+  setInvestmentAmount: (value: string) => void,
+  setIsLoading: (loading: boolean) => void,
+  setLoadingToken: (token: string | null) => void,
+  setErrorWithTimeout: (msg: string) => void
+) {
+  if (walletAddress && myWalletAccount) {
+    let newBalances: Record<string, number> = {};
+    const provider = new RpcProvider({ nodeUrl: "https://rpc.nethermind.io/mainnet-juno" });
+    const tokenAddresses = getMarketTokenAddress();
+    const tokenPrices = getMarketTokenPrice();
+    try {
+      for (const token in tokenAddresses) {
+        setLoadingToken(token);
+        try {
+          const { abi } = await provider.getClassAt(tokenAddresses[token]);
+          const contract = new Contract(abi, tokenAddresses[token], myWalletAccount);
+          const balanceResponse = await contract.balanceOf(walletAddress);
+          const decimalsResponse = await contract.decimals();
+          if (balanceResponse && decimalsResponse) {
+            const balance = uint256.uint256ToBN(balanceResponse).toString();
+            const decimals = parseInt(decimalsResponse, 10);
+            const adjustedBalance = (balance / 10 ** decimals).toFixed(5);
+            newBalances[token] = Number(adjustedBalance);
+          } else {
+            newBalances[token] = 0;
+          }
+        } catch (err: any) {
+          setErrorWithTimeout(err.message);
+        }
+      }
+    } catch (err: any) {
+      setErrorWithTimeout(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+    const filteredBalances = Object.fromEntries(
+      Object.entries(newBalances).filter(([token, balance]) => balance !== 0)
+    );
+    let filteredPrices: Record<string, number> = {};
+    for (const token in filteredBalances) {
+      filteredPrices[token] = tokenPrices[token];
+    }
+    let mixedBalances: BalanceItem[] = [];
+    for (const token in filteredBalances) {
+      mixedBalances.push({
+        token,
+        balance: filteredBalances[token],
+        price: filteredPrices[token],
+        total: filteredBalances[token] * filteredPrices[token],
+      });
+    }
+    setWalletBalances(mixedBalances);
+    for (const token in mixedBalances) {
+      if (mixedBalances[token].token === "ETH") {
+        mixedBalances[token].balance -= 2 / mixedBalances[token].price;
+        mixedBalances[token].total -= 2;
+      }
+    }
+    setBalances(mixedBalances);
+    const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
+    setTotalWalletValue(totalWalletValue);
+    setInvestmentAmount(totalWalletValue.toFixed(5));
+  }
+}
+
+export async function fetchBalancesWithBrian(
+  walletAddress: string | null,
+  myWalletAccount: any,
+  setBalancesWithBrian: (balances: Record<string, number>[] | null) => void,
+  setErrorWithTimeout: (msg: string) => void
+) {
+  if (walletAddress && myWalletAccount) {
+    const tokenSymbols = getMarketTokenAddress();
+    let str_prompt_tokens = "Get wallet balance in ";
+    for (const token in tokenSymbols) {
+      str_prompt_tokens += tokenSymbols[token] + ", ";
+    }
+    str_prompt_tokens += "on Starknet";
+    try {
+      const brian = new BrianSDK({ apiKey: import.meta.env.VITE_BRIAN_API_KEY });
+      const brianBalances = await brian.transact({
+        prompt: str_prompt_tokens,
+        address: walletAddress,
+      });
+      const newBrianBalances = extractAllBrianBalances(brianBalances);
+      setBalancesWithBrian(newBrianBalances);
+    } catch (err: any) {
+      setErrorWithTimeout(err.message);
+    }
+  }
+}
+
+export function handleSwapPrepare(
+  balances: BalanceItem[],
+  investmentBreakdown: InvestmentBreakdown,
+  setSwapsToPrepare: (swaps: Swap[]) => void
+) {
+  const currentWallet = balances.reduce((acc, item) => ({ ...acc, [item.token]: parseFloat(item.total) }), {});
+  const targetWallet: Record<string, number> = {};
+  for (const token in investmentBreakdown) {
+    targetWallet[token] = parseFloat(investmentBreakdown[token].amount);
+  }
+  const swapAmounts = calculateCryptoDelta(currentWallet, targetWallet);
+  const swaps = calculateCryptoSwap(swapAmounts);
+  setSwapsToPrepare(swaps);
+}
+
+export async function handlePrepareSwapTransactions(
+  swapsToPrepare: Swap[],
+  setSwapStatuses: (statuses: string[]) => void,
+  setTransactionsCompleted: (completed: boolean) => void,
+  brian: BrianSDK,
+  walletAddress: string | null,
+  myWalletAccount: any,
+  setErrorWithTimeout: (msg: string) => void
+) {
+  setTransactionsCompleted(false);
+  const newSwapStatuses = swapsToPrepare.map(() => 'pending');
+  setSwapStatuses(newSwapStatuses);
+
+  let allTransactionsSuccessful = true;
+  for (let i = 0; i < swapsToPrepare.length; i++) {
+    newSwapStatuses[i] = 'loading';
+    setSwapStatuses([...newSwapStatuses]);
+    const swap = swapsToPrepare[i];
+    const prompt = `Swap $${swap.amount.toFixed(2)} worth of '${swap.sell}' to '${swap.buy}' on Starknet`;
+    try {
+      const brianResponse = await brian.transact({
+        prompt: prompt,
+        address: walletAddress,
+      });
+      if ((Number(brianResponse[0]["data"]["toAmountUSD"]) - Number(brianResponse[0]["data"]["fromAmountUSD"])) / Number(brianResponse[0]["data"]["fromAmountUSD"]) < -0.01) {
+        setErrorWithTimeout(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}`);
+        newSwapStatuses[i] = 'error';
+        setSwapStatuses([...newSwapStatuses]);
+        continue;
+      }
+      const extractedParams = brianResponse[0]["extractedParams"];
+      if (
+        extractedParams &&
+        extractedParams.action === "swap" &&
+        extractedParams.chain === "Starknet" &&
+        extractedParams.token1 === swap.sell &&
+        extractedParams.token2 === swap.buy
+      ) {
+        const txSteps = brianResponse[0]["data"]["steps"];
+        const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
+        await myWalletAccount.waitForTransaction(transferTxHash);
+        newSwapStatuses[i] = 'success';
+        setSwapStatuses([...newSwapStatuses]);
+      } else {
+        setErrorWithTimeout("Unexpected response from Brian. Please check the console.");
+        newSwapStatuses[i] = 'error';
+        setSwapStatuses([...newSwapStatuses]);
+      }
+    } catch (error: any) {
+      setErrorWithTimeout(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
+      allTransactionsSuccessful = false;
+      newSwapStatuses[i] = 'error';
+      setSwapStatuses([...newSwapStatuses]);
+    }
+  }
+  setTransactionsCompleted(allTransactionsSuccessful);
+}
+
+export function getInvestmentBreakdown(
+  solution: string,
+  amount: number
+): InvestmentBreakdown | null {
+  const tokensData = loadTokens();
+  const goodTokensData = filterTokens(tokensData);
+  let tokenMcaps = getMarketTokenMcap(goodTokensData);
+  let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
+  sortedTokens = sortedTokens.slice(0, 15);
+  let sortedTokensData = filterTokens(goodTokensData, sortedTokens);
+  const tokenPrices = getMarketTokenPrice(sortedTokensData);
+  let tokenEMA7Hourly: Record<string, number> = {};
+  let tokenMaxStdDev: Record<string, number> = {};
+  for (const token of sortedTokens) {
+    const tokenPriceHistory = extractPrices(sortedTokensData, token);
+    try {
+      const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
+      tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
+      tokenMaxStdDev[token] = tokenEMA7HourlyAndMaxStdDev.maxStdDev;
+      if (tokenMaxStdDev[token] < 2) {
+        if (tokenPrices[token] < 1.07 && tokenPrices[token] > 0.93) {
+          delete tokenEMA7Hourly[token];
+          delete tokenMaxStdDev[token];
+          sortedTokens = sortedTokens.filter(t => t !== token);
+        }
+      }
+    } catch (error) {
+      return null;
+    }
+  }
+  let k_alpha = 0.75;
+  let k_mini = 0.03;
+  let n_tokens = 10;
+  if (solution === 'Secure') {
+    k_alpha = 0.8;
+    k_mini = 0.03;
+    n_tokens = 5;
+  } else if (solution === 'Offensive') {
+    k_alpha = 0.5;
+    k_mini = 0.03;
+    n_tokens = 10;
+  }
+  sortedTokens = sortedTokens.slice(0, n_tokens);
+  tokenEMA7Hourly = Object.fromEntries(sortedTokens.map(token => [token, tokenEMA7Hourly[token]]));
+  tokenMaxStdDev = Object.fromEntries(sortedTokens.map(token => [token, tokenMaxStdDev[token]]));
+  sortedTokensData = filterTokens(sortedTokensData, sortedTokens);
+  const alpha = k_alpha * Math.log(k_mini) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]));
+  let tokenDistribution: Record<string, number> = {};
+  for (const token in tokenEMA7Hourly) {
+    tokenDistribution[token] = Math.pow(tokenMcaps[token] * tokenEMA7Hourly[token] / tokenPrices[token], alpha);
+  }
+  const totalDistribution = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
+  for (const token in tokenEMA7Hourly) {
+    tokenDistribution[token] = tokenDistribution[token] / totalDistribution;
+  }
+  let breakdown: InvestmentBreakdown = {};
+  for (const token in tokenDistribution) {
+    breakdown[token] = {
+      amount: tokenDistribution[token] * amount,
+      percentage: tokenDistribution[token] * 100,
+    };
+  }
+  return breakdown;
 }
