@@ -64,7 +64,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck, faTimes, faSpinner, faHandSpock } from '@fortawesome/free-solid-svg-icons';
 import { PieChart, Pie, Cell } from 'recharts';
 import { faGithub } from '@fortawesome/free-brands-svg-icons';
-import { groupAndSortWallets, useWallet } from "@aptos-labs/wallet-adapter-react";
+import { groupAndSortWallets, WalletName, useWallet, WalletContextState } from "@aptos-labs/wallet-adapter-react";
 
 const mode_debug = false;
 
@@ -420,7 +420,9 @@ function calculateCryptoSwap(deltaTransactions: Record<string, number>): Swap[] 
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState<WalletAccount | null>(null);
+  const [myAptosWalletAccount, setMyAptosWalletAccount] = useState<WalletContextState | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  //const [aptosWalletAddress, setAptosWalletAddress] = useState<string | null>(null);
   const [walletBalances, setWalletBalances] = useState<BalanceItem[]>([]);
   const [balances, setBalances] = useState<BalanceItem[]>([]);
   const [balancesWithBrian, setBalancesWithBrian] = useState<Record<string, number>[] | null>(null);
@@ -721,6 +723,25 @@ function App() {
         return;
       }
       // You can use aptosWallet.connect() or other methods here if needed
+      if (aptosWallet.connected === false) {
+        try {
+            // Change below to the desired wallet name instead of "Petra"
+            await aptosWallet.connect("Petra" as WalletName<"Petra">);
+            console.log('Connected to wallet:', aptosWallet.account.address.toString());
+        } catch (error) {
+            console.error('Failed to connect to wallet:', error);
+            setShowAptosWalletMsg(true);
+            return;
+        }
+      } else {
+        const walletAddress = aptosWallet.account.address.toString();
+        console.log('Already connected to wallet:', walletAddress);
+        setMyAptosWalletAccount(aptosWallet);
+        setWalletAddress(walletAddress);
+
+      }
+
+
     } catch (err) {
       console.error("Error connecting wallet:", err);
       setErrorWithTimeout((err as Error).message);
@@ -1302,7 +1323,7 @@ function App() {
 
         <a href="https://github.com/jeugregg/balanced-bag-ai" target="_blank" rel="noopener noreferrer" className="footer-text">
           <FontAwesomeIcon icon={faGithub} className="footer-icon" /> GitHub Repository
-        </a> - 2024 - Built by jeugregg
+        </a> - 2025 - Built by jeugregg
       </footer>
     </div >
   );
