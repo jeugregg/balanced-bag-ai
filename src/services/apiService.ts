@@ -477,12 +477,12 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
     const poolItems = await sdk.Pool.fetchAllPools();
     let marketAptos: Record<string, any> = {};
     const tokens_default = [
-        { name: "bitcoin", symbol: "WBTC" },
-        { name: "ethereum", symbol: "WETH" },
-        { name: "aptos", symbol: "APT" },
-        { name: "solana", symbol: "SOL" },
-        { name: "usd-coin", symbol: "USDC" },
-        { name: "tether", symbol: "USDT" }
+        { name: "bitcoin", symbol: "WBTC", shortName: "BTC" },
+        { name: "ethereum", symbol: "WETH", shortName: "ETH" },
+        { name: "aptos", symbol: "APT", shortName: "APT" },
+        { name: "solana", symbol: "SOL", shortName: "SOL" },
+        { name: "usd-coin", symbol: "USDC", shortName: "USD" },
+        { name: "tether", symbol: "USDT", shortName: "USD" }
     ];
 
     for (const token of tokens_default) {
@@ -493,6 +493,8 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
             method: 'GET',
             headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
         };
+        // pause for 1 second to avoid rate limit
+        await new Promise(resolve => setTimeout(resolve, 1000));
         const res_cg = await fetch(url, options);
         const data_cg = await res_cg.json();
         const index_token = poolItems.findIndex((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
@@ -513,6 +515,73 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
             }
         }
     }
+
+    // select low cap tokens in hyperion pools
+    for (const pool of poolItems) {
+        const token1 = pool.pool.token1Info;
+        const token2 = pool.pool.token2Info;
+        const tvlUSDpool = parseFloat(pool["tvlUSD"]);
+        if (tvlUSDpool < 50000) {
+            continue;
+        }
+        // skip all default tokens pools
+        console.log("current pool", token1.symbol, token2.symbol);
+        let isDefaultPool = false;
+        let token1IsDefault = false;
+        let token2IsDefault = false;
+        for (const defaultToken of tokens_default) {
+            // compare symbols case-insensitively
+            if (token1.symbol.toLowerCase().includes(defaultToken.shortName.toLowerCase()) ) {
+                token1IsDefault = true;
+            }
+            if (token2.symbol.toLowerCase().includes(defaultToken.shortName.toLowerCase()) ) {
+                token2IsDefault = true;
+            }
+            if (token1IsDefault && token2IsDefault) {
+                console.log("skip : default pool", token1.symbol, token2.symbol);
+                isDefaultPool = true;
+                break;
+            }
+        }
+        if (isDefaultPool) {
+            continue;
+        }
+
+        // check if either token is a low cap token
+        if (marketAptos[token1.symbol] && marketAptos[token2.symbol]) {
+                break;
+        }
+        
+  
+        // check if either token is a low cap token
+        if (marketAptos[token1.symbol] && marketAptos[token2.symbol]) {
+            console.log("skip : both tokens are default tokens", token1.symbol, token2.symbol);
+            continue;
+        }
+
+        // if we reached this point, it means we have a valid pool
+        // we can add it to the list of low cap pools
+        const tokenToAdd = marketAptos[token1.symbol] ? token2 : token1;
+        if (!marketAptos[tokenToAdd.symbol]) {
+            const pools_token = poolItems.filter((pool: any) => (pool.pool.token1Info.symbol === tokenToAdd.symbol) || (pool.pool.token2Info.symbol === tokenToAdd.symbol));
+            if (pools_token.length > 1) {
+                    let tvlUSD = 0;
+                    for (const pool of pools_token) {
+                        tvlUSD += parseFloat(pool["tvlUSD"]);
+                }
+                // TODO : fetch price and market cap from coingecko
+                console.log("OK : add low cap token", tokenToAdd.symbol, "tvlUSD", tvlUSD);
+                marketAptos[tokenToAdd.symbol] = {
+                    currentPrice: 0,
+                    marketCap: 0,
+                    aptosTvl: tvlUSD,
+                };
+            }
+        }
+
+    }
+    console.log(marketAptos);
     localStorage.setItem('aptosTokens', JSON.stringify(marketAptos));
     return marketAptos;
 }
+
