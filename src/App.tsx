@@ -79,6 +79,7 @@ import {
   getInvestmentBreakdown,
   connectStarknetWallet,
   connectAptosWallet,
+  fetchAptosBalances,
 } from "./services/apiService";
 
 const mode_debug = false;
@@ -295,7 +296,23 @@ function App() {
     );
     // Optionally, fetch Brian balances:
     // fetchBalancesWithBrian(walletAddress, myWalletAccount, setBalancesWithBrian, setErrorWithTimeout);
-  }, [walletAddress, myWalletAccount]);
+  }, [myWalletAccount]);
+
+  useEffect(() => {
+    fetchAptosBalances(
+      walletAddress,
+      myAptosWalletAccount,
+      setWalletBalances,
+      setBalances,
+      setTotalWalletValue,
+      setInvestmentAmount,
+      setIsLoading,
+      setLoadingToken,
+      setErrorWithTimeout
+    );
+    // Optionally, fetch Brian balances:
+    // fetchBalancesWithBrian(walletAddress, myWalletAccount, setBalancesWithBrian, setErrorWithTimeout);
+  }, [myAptosWalletAccount]);
 
   useEffect(() => {
     if (investmentBreakdown) {
@@ -355,9 +372,9 @@ function App() {
   }, [investmentAmount, selectedSolution]
   );
 
-  useEffect(() => {
+  /* useEffect(() => {
     fetchBalances();
-  }, [walletAddress, myWalletAccount]);
+  }, [walletAddress, myWalletAccount]); */
 
   return (
     <div>

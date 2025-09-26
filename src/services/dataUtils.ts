@@ -23,11 +23,42 @@ export function getMarketTokenAddress(tokens: TokenData[] | null = null): Record
   return tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.address }), {});
 }
 
+export function getAptosMarketTokenAddress(tokens: any = null): Record<string, string> {
+  if (tokens === null) {
+    tokens = loadAptosTokens();
+  }
+  // tokens is an object, not an array. Convert to array if needed.
+  // If tokens is an object like { BTC: { address: ... }, ETH: { address: ... } }
+  // then map over Object.entries
+  if (!Array.isArray(tokens)) {
+    return Object.entries(tokens).reduce((acc, [symbol, tokenObj]) => {
+      acc[symbol] = tokenObj.address;
+      return acc;
+    }, {} as Record<string, string>);
+  }
+  // fallback for array format
+  return tokens.reduce((acc: Record<string, string>, token: any) => ({ ...acc, [token.symbol]: token.address }), {});
+}
 export function getMarketTokenPrice(tokens: TokenData[] | null = null): Record<string, number> {
   if (tokens === null) {
     tokens = loadTokens();
   }
   return tokens.reduce((acc, token) => ({ ...acc, [token.symbol]: token.market.currentPrice }), {});
+}
+
+export function getAptosMarketTokenPrice(tokens: any = null): Record<string, number> {
+  if (tokens === null) {
+    tokens = loadAptosTokens();
+  }
+  // If tokens is an object (not array), convert to array of values
+  if (!Array.isArray(tokens)) {
+    return Object.entries(tokens).reduce((acc, [symbol, tokenObj]) => {
+      acc[symbol] = tokenObj.currentPrice;
+      return acc;
+    }, {} as Record<string, number>);
+  }
+  // fallback for array format
+  return tokens.reduce((acc: Record<string, number>, token: any) => ({ ...acc, [token.symbol]: token.market.currentPrice }), {});
 }
 
 export function extractPrices(data: TokenData[], tokenSymbol: string): number[] {
@@ -39,6 +70,11 @@ export function extractPrices(data: TokenData[], tokenSymbol: string): number[] 
 
 export function loadTokens(): TokenData[] {
   const storedTokens = localStorage.getItem('starknetTokens');
+  return JSON.parse(storedTokens || "[]");
+}
+
+export function loadAptosTokens(): TokenData[] {
+  const storedTokens = localStorage.getItem('aptosTokens');
   return JSON.parse(storedTokens || "[]");
 }
 
