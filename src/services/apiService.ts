@@ -1,10 +1,20 @@
 import { Contract, uint256, RpcProvider } from "starknet";
 import { BrianSDK } from "@brian-ai/sdk";
 import { initHyperionSDK } from '@hyperionxyz/sdk'
-import { Network } from "@aptos-labs/ts-sdk";
+import { Network, Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
+const aptosConfig = new AptosConfig({ network: Network.MAINNET });
+const aptos = new Aptos(aptosConfig);
+import { AptosJSProClient } from "@aptos-labs/js-pro";
+const aptosClient = new AptosJSProClient({
+  network: { network: Network.MAINNET },
+});
+
+type Coin = { coin: { value: string } };
 import {
   getMarketTokenAddress,
+  getAptosMarketTokenAddress,
   getMarketTokenPrice,
+  getAptosMarketTokenPrice,
   calculateCryptoDelta,
   calculateCryptoSwap,
   extractAllBrianBalances,
@@ -90,7 +100,7 @@ export async function askReduceList(brian: BrianSDK): Promise<string[]> {
   localStorage.setItem('listReducedTokens', JSON.stringify(listReducedTokens));
   return listReducedTokens;
 }
-
+// fetch balances from Starknet wallet
 export async function fetchBalances(
   walletAddress: string | null,
   myWalletAccount: any,
@@ -162,7 +172,7 @@ export async function fetchBalances(
     setInvestmentAmount(totalWalletValue.toFixed(5));
   }
 }
-
+// fetch Starknet wallet balances from Brian AI
 export async function fetchBalancesWithBrian(
   walletAddress: string | null,
   myWalletAccount: any,
@@ -186,6 +196,109 @@ export async function fetchBalancesWithBrian(
       setBalancesWithBrian(newBrianBalances);
     } catch (err: any) {
       setErrorWithTimeout(err.message);
+    }
+  }
+}
+
+// fetch balances from Aptos wallet
+export async function fetchAptosBalances(
+  walletAddress: string | null,
+  aptosWallet: any,
+  setWalletBalances: (balances: BalanceItem[]) => void,
+  setBalances: (balances: BalanceItem[]) => void,
+  setTotalWalletValue: (value: number) => void,
+  setInvestmentAmount: (value: string) => void,
+  setIsLoading: (loading: boolean) => void,
+  setLoadingToken: (token: string | null) => void,
+  setErrorWithTimeout: (msg: string) => void
+) {
+  if (aptosWallet && aptosWallet.connected) {
+    try {
+      //const walletAddress = aptosWallet.account.address.toString();
+      console.log("Aptos wallet address:", walletAddress);
+      if (!walletAddress) {
+        setErrorWithTimeout("Wallet address is missing.");
+        return;
+      }
+      const { nextCursor, prevCursor, balances } = await aptosClient.fetchAccountCoins({
+        address: walletAddress,
+      });
+      console.log("Aptos balances:", balances);
+      // filter only market tokens
+      const tokenAddresses = getAptosMarketTokenAddress();
+      // check for each coin in balances : 
+      // example : balances[0].assetTypeV2 == tokenAddresses[balances[0].metadata.symbol]
+      const filteredBalances = balances.filter(balance => {
+        // tokenAddresses may be an object with symbol as key and address as value
+        // balance.metadata.symbol should exist in tokenAddresses
+        return Object.prototype.hasOwnProperty.call(tokenAddresses, balance.metadata.symbol);
+      });
+      console.log("Filtered Aptos balances:", filteredBalances);
+
+      const tokenPrices = getAptosMarketTokenPrice();
+      console.log("Aptos tokenAddresses:", tokenAddresses);
+      console.log("Aptos tokenPrices:", tokenPrices);
+      let newBalances: Record<string, number> = {};
+      for (const token in tokenAddresses) {
+        setLoadingToken(token);
+        // if token is in filteredBalances, get its balance
+        const foundBalance = filteredBalances.find(balance => balance.metadata.symbol === token);
+        if (foundBalance) {
+
+          newBalances[token] = foundBalance.amount / (10 ** foundBalance.metadata.decimals);
+          
+        } else {
+          newBalances[token] = 0;
+        }
+      }
+      setIsLoading(false);
+      console.log("Aptos newBalances:", newBalances);
+      const newFilteredBalances = Object.fromEntries(
+      Object.entries(newBalances).filter(([token, balance]) => balance !== 0)
+      );
+
+      let filteredPrices: Record<string, number> = {};
+      for (const token in newFilteredBalances) {
+        filteredPrices[token] = tokenPrices[token];
+      }
+      let mixedBalances: BalanceItem[] = [];
+      for (const token in newFilteredBalances) {
+        mixedBalances.push({
+          token,
+          balance: newFilteredBalances[token],
+          price: filteredPrices[token],
+          total: newFilteredBalances[token] * filteredPrices[token],
+        });
+      }
+      setWalletBalances(mixedBalances);
+      for (const token in mixedBalances) {
+        if (mixedBalances[token].token === "APT") {
+          mixedBalances[token].balance -= 0.1 / mixedBalances[token].price;
+          mixedBalances[token].total -= 0.1;
+        }
+      }
+      setBalances(mixedBalances);
+      const totalWalletValue = mixedBalances.reduce((sum, item) => sum + parseFloat(item.total), 0);
+      setTotalWalletValue(totalWalletValue);
+      setInvestmentAmount(totalWalletValue.toFixed(5));
+
+      /* const tokenAddress = "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b";
+      const resourceType = `0x1::coin::CoinStore<${tokenAddress}>`;
+      const resource = await aptos.getAccountResource<Coin>(
+        { accountAddress: walletAddress, resourceType: resourceType }
+      );
+      if (resource && resource && resource.coin) {
+        console.log("Balance:", resource.coin.value);
+      } else {
+        console.log("Token not held by this wallet.");
+      } */
+
+    }
+    catch (err: any) {
+      setErrorWithTimeout(err.message);
+      return;
+    } finally {
+      setIsLoading(false);
     }
   }
 }
@@ -387,103 +500,18 @@ export async function connectAptosWallet(
 
         }
         const walletAddress = aptosWallet.account.address.toString();
-
-        /* const sdk = initHyperionSDK({
-            network: Network.MAINNET, 
-            APTOS_API_KEY: aptosApiKey
-        });
-        
-        const poolItems = await sdk.Pool.fetchAllPools();
-        console.log(poolItems)
-        let marketAptos = {};
-        const tokens_default = [
-            {  
-                name:"bitcoin",
-                symbol:"WBTC"
-            },
-            {
-                name:"ethereum",
-                symbol:"WETH"
-            },
-            {
-                name:"aptos",
-                symbol:"APT"
-            },
-            {
-                name:"solana",
-                symbol:"SOL"
-            },
-            {
-                name:"usd-coin",
-                symbol:"USDC"
-            },
-            {
-                name:"tether",
-                symbol:"USDT"
-
-            }
-        ];
-           
-        //const tokens_symbols = ["WBTC", "WETH", "APT", "SOL", "USDC", "USDT"];
-
-        for (const token of tokens_default) {
-            const token_symbol = token["symbol"];
-            const token_id = token["name"];
-            const url = `https://api.coingecko.com/api/v3/simple/price?ids=${token_id}&vs_currencies=usd&include_market_cap=true`;
-            const options = {
-                method: 'GET',
-                headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
-            };
-            const res_cg = await fetch(url, options);
-            const data_cg = await res_cg.json();
-            console.log(data_cg);
-            const index_token = poolItems.findIndex((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
-            console.log(index_token);
-
-            if (index_token != -1) {
-                const pools_token = poolItems.filter((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
-                if (pools_token.length > 1) {
-                    let tvlUSD = 0;
-                    for (const pool of pools_token) {
-                        tvlUSD += parseFloat(pool["tvlUSD"]);
-                    }
-                    if (tvlUSD > 50000) {
-                        marketAptos[token_symbol] = {
-                            currentPrice: data_cg[token_id]["usd"],
-                            marketCap: data_cg[token_id]["usd_market_cap"],
-                            aptosTvl: tvlUSD,
-                        };
-                    };
-                };
-                //poolItems[index_token]["market"]["marketCap"] = data_cg[token_id]["usd_market_cap"];
-            }
-        } */
+        setWalletAddress(walletAddress);
         const marketAptos = await getMarketAptos();
         console.log(marketAptos);
         localStorage.setItem('aptosTokens', JSON.stringify(marketAptos));
         setMyAptosWalletAccount(aptosWallet);
-        setWalletAddress(walletAddress);
+
     } catch (err: any) {
         setErrorWithTimeout(err.message);
     }
 }
 
 export async function getMarketAptos(): Promise<Record<string, any>> {
-    /* // get token list from coingecko https://api.coingecko.com/api/v3/coins/list
-    const url = 'https://api.coingecko.com/api/v3/coins/list';
-    const options = {
-        method: 'GET',
-        headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
-    };
-    const res = await fetch(url, options);
-    const coinlist = await res.json();
-    if (typeof coinlist !== 'object') {
-        console.error('Invalid JSON data received from API.');
-        return {};
-    }
-    // pause 1 second to avoid rate limit
-    await new Promise(resolve => setTimeout(resolve, 1000)); */
-
     // get hyperion pools
     const sdk = initHyperionSDK({
         network: Network.MAINNET, 
@@ -491,6 +519,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
     });
 
     const poolItems = await sdk.Pool.fetchAllPools();
+    console.log("hyperion pools:", poolItems);
     let marketAptos: Record<string, any> = {};
     const tokens_default = [
         { name: "bitcoin", symbol: "WBTC", shortName: "BTC" },
@@ -501,38 +530,45 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
         { name: "tether", symbol: "USDT", shortName: "USD" }
     ];
 
+    // select default tokens in hyperion pools
     for (const token of tokens_default) {
-        const token_symbol = token.symbol;
-        const token_id = token.name;
-        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${token_id}&vs_currencies=usd&include_market_cap=true`;
-        const options = {
-            method: 'GET',
-            headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
-        };
-        // pause for 1 second to avoid rate limit
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const res_cg = await fetch(url, options);
-        const data_cg = await res_cg.json();
-        const index_token = poolItems.findIndex((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
-        if (index_token != -1) {
-            const pools_token = poolItems.filter((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
-            if (pools_token.length > 1) {
-                let tvlUSD = 0;
-                for (const pool of pools_token) {
-                    tvlUSD += parseFloat(pool["tvlUSD"]);
-                }
-                if (tvlUSD > 50000) {
-                    marketAptos[token_symbol] = {
-                        currentPrice: data_cg[token_id]["usd"],
-                        marketCap: data_cg[token_id]["usd_market_cap"],
-                        aptosTvl: tvlUSD,
-                    };
-                }
-            }
-        }
+      const token_symbol = token.symbol;
+      const token_id = token.name;
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${token_id}&vs_currencies=usd&include_market_cap=true`;
+      const options = {
+          method: 'GET',
+          headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
+      };
+      // pause for 1 second to avoid rate limit
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const res_cg = await fetch(url, options);
+      const data_cg = await res_cg.json();
+      const index_token = poolItems.findIndex((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
+      if (index_token != -1) {
+          const pools_token = poolItems.filter((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
+          if (pools_token.length > 1) {
+              let tvlUSD = 0;
+              for (const pool of pools_token) {
+                  tvlUSD += parseFloat(pool["tvlUSD"]);
+              }
+              if (tvlUSD > 50000) {
+                  // get token address from first pool : token 1 or token 2 depending on symbol
+                  const tokenAddress = pools_token[0].pool.token1Info.symbol === token_symbol
+                      ? pools_token[0].pool.token1
+                      : pools_token[0].pool.token2;
+
+                  marketAptos[token_symbol] = {
+                      currentPrice: data_cg[token_id]["usd"],
+                      marketCap: data_cg[token_id]["usd_market_cap"],
+                      aptosTvl: tvlUSD,
+                      address: tokenAddress,
+                  };
+              }
+          }
+      }
     }
 
-    // select low cap tokens in hyperion pools
+    // select other low cap tokens in hyperion pools
     for (const pool of poolItems) {
         const token1 = pool.pool.token1Info;
         const token2 = pool.pool.token2Info;
@@ -610,10 +646,16 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
         
                 }
 
+              // get token address from first pool : token 1 or token 2 depending on symbol
+              const tokenAddress = pools_token[0].pool.token1Info.symbol === tokenToAdd.symbol
+                  ? pools_token[0].pool.token1
+                  : pools_token[0].pool.token2;
+
                 marketAptos[tokenToAdd.symbol] = {
                     currentPrice: current_price,
                     marketCap: marketcap_usd,
                     aptosTvl: tvlUSD,
+                    address: tokenAddress,
                 };
             }
         }
