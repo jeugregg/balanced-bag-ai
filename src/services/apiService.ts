@@ -469,6 +469,22 @@ export async function connectAptosWallet(
 }
 
 export async function getMarketAptos(): Promise<Record<string, any>> {
+    /* // get token list from coingecko https://api.coingecko.com/api/v3/coins/list
+    const url = 'https://api.coingecko.com/api/v3/coins/list';
+    const options = {
+        method: 'GET',
+        headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
+    };
+    const res = await fetch(url, options);
+    const coinlist = await res.json();
+    if (typeof coinlist !== 'object') {
+        console.error('Invalid JSON data received from API.');
+        return {};
+    }
+    // pause 1 second to avoid rate limit
+    await new Promise(resolve => setTimeout(resolve, 1000)); */
+
+    // get hyperion pools
     const sdk = initHyperionSDK({
         network: Network.MAINNET, 
         APTOS_API_KEY: aptosApiKey
@@ -570,10 +586,33 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                         tvlUSD += parseFloat(pool["tvlUSD"]);
                 }
                 // TODO : fetch price and market cap from coingecko
+                let marketcap_usd = 0;
+                let current_price = 0;
                 console.log("OK : add low cap token", tokenToAdd.symbol, "tvlUSD", tvlUSD);
+
+                // get token price and marketcap from coingecko by symbol
+                const url_token = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${tokenToAdd.symbol}`;
+                const options_token = {
+                    method: 'GET',
+                    headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
+                };
+                // pause for 1 second to avoid rate limit
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                const res_cg_token = await fetch(url_token, options_token);
+                const data_cg_token = await res_cg_token.json();
+                if (data_cg_token && data_cg_token.length > 0) {
+                    marketcap_usd = data_cg_token[0]["market_cap"];
+                    current_price = data_cg_token[0]["current_price"];
+                } else {
+                    console.log("skip : token not found on coingecko", tokenToAdd.symbol);
+                    marketcap_usd = 0;
+                    current_price = 0;
+        
+                }
+
                 marketAptos[tokenToAdd.symbol] = {
-                    currentPrice: 0,
-                    marketCap: 0,
+                    currentPrice: current_price,
+                    marketCap: marketcap_usd,
                     aptosTvl: tvlUSD,
                 };
             }
