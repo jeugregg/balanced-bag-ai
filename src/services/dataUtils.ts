@@ -68,6 +68,16 @@ export function extractPrices(data: TokenData[], tokenSymbol: string): number[] 
   return tokenData.linePriceFeedInUsd.map(priceData => priceData.value);
 }
 
+export function extractAptosPrices(data: TokenData[], tokenSymbol: string): number[] {
+  // Aptos version of extractPrices : example : 
+  //  data : { token1: {...linePriceFeedInUsd: [{date: ..., value: ...,} ...]
+  //  token2: {...linePriceFeedInUsd: [{date: ..., value: ...,} ...]
+  //  ...
+  //  }
+  // return value array of prices for the tokenSymbol
+  if (!data || data.length === 0) return [];
+  return data[tokenSymbol].linePriceFeedInUsd.map(priceData => priceData.value);
+}
 export function loadTokens(): TokenData[] {
   const storedTokens = localStorage.getItem('starknetTokens');
   return JSON.parse(storedTokens || "[]");
@@ -86,6 +96,32 @@ export function getMarketTokenMcap(tokens: TokenData[] | null = null): Record<st
     ...acc,
     [token.symbol]: token.market.marketCap === 0 ? token.market.starknetTvl : token.market.marketCap
   }), {});
+}
+export function getAptosMarketTokenMcap(tokens: any = null): Record<string, number> {
+  if (tokens === null) {
+    tokens = loadAptosTokens();
+  }
+  // If tokens is an object (not array), convert to array of values
+  if (!Array.isArray(tokens)) {
+    return Object.entries(tokens).reduce((acc, [symbol, tokenObj]) => {
+      acc[symbol] = tokenObj.marketCap === 0 ? tokenObj.tvl : tokenObj.marketCap;
+      return acc;
+    }, {} as Record<string, number>);
+  }
+  // fallback for array format
+  return tokens.reduce((acc: Record<string, number>, token: any) => ({
+    ...acc,
+    [token.symbol]: token.market.marketCap === 0 ? token.market.tvl : token.market.marketCap
+  }), {});
+}
+
+export function filterNonStableTokens(tokens: TokenData[]): TokenData[] {
+  const stablecoinSymbols = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'UST', 'FRAX', 'GUSD', 'PAX', 'HUSD'];
+  // filter token list to exclude stablecoins with this format of token : 
+  // tokens = { USDT: token_data_1, BTC: token_data_2, ... }
+  return Object.fromEntries(
+    Object.entries(tokens).filter(([symbol]) => !stablecoinSymbols.includes(symbol))
+  );
 }
 
 export function filterTokens(tokens: TokenData[], listReducedTokensInput: string[] | null = null): TokenData[] {

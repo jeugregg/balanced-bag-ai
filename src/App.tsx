@@ -181,7 +181,7 @@ function App() {
 
   const handleSolutionSelect = (solution: string) => {
     setSelectedSolution(solution);
-    const breakdown = getInvestmentBreakdown(solution, parseFloat(investmentAmount));
+    const breakdown = getInvestmentBreakdown(solution, parseFloat(investmentAmount), myAptosWalletAccount);
     setInvestmentBreakdown(breakdown);
   };
 
@@ -322,7 +322,7 @@ function App() {
 
   useEffect(() => {
     if (investmentAmount && selectedSolution) {
-      const breakdown = getInvestmentBreakdown(selectedSolution, parseFloat(investmentAmount));
+      const breakdown = getInvestmentBreakdown(selectedSolution, parseFloat(investmentAmount), myAptosWalletAccount);
       setInvestmentBreakdown(breakdown);
     } else {
       setInvestmentBreakdown(null);
@@ -356,7 +356,7 @@ function App() {
   useEffect(() => {
     // Call handleSwapPrepare whenever investmentBreakdown changes and is not null
     if (investmentBreakdown) {
-      handleSwapPrepare();
+      handleSwapPrepare(balances, investmentBreakdown, setSwapsToPrepare);
     }
   }, [investmentBreakdown]
   );
@@ -364,7 +364,7 @@ function App() {
   useEffect(() => {
     // Update investment breakdown whenever investmentAmount changes
     if (investmentAmount && selectedSolution) {
-      const breakdown = getInvestmentBreakdown(selectedSolution, parseFloat(investmentAmount));
+      const breakdown = getInvestmentBreakdown(selectedSolution, parseFloat(investmentAmount), myAptosWalletAccount);
       setInvestmentBreakdown(breakdown);
     } else {
       setInvestmentBreakdown(null); // Clear breakdown if no amount or solution selected
