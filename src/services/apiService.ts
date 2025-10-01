@@ -4,6 +4,7 @@ import { initHyperionSDK } from '@hyperionxyz/sdk'
 import { Network, Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
 const aptosConfig = new AptosConfig({ network: Network.MAINNET });
 const aptos = new Aptos(aptosConfig);
+const MODE_DEBUG = true;
 import { AptosJSProClient } from "@aptos-labs/js-pro";
 const aptosClient = new AptosJSProClient({
   network: { network: Network.MAINNET },
@@ -20,9 +21,13 @@ import {
   extractAllBrianBalances,
   filterTokens,
   extractPrices,
+  extractAptosPrices,
   getMarketTokenMcap,
   calculateEMA7HourlyAndMaxStdDev,
   loadTokens,
+  loadAptosTokens,
+  getAptosMarketTokenMcap,
+  filterNonStableTokens,
 } from "./dataUtils";
 import { TokenData, BalanceItem, InvestmentBreakdown, Swap } from "../App";
 //import { Network } from "@aptos-labs/wallet-adapter-react";
@@ -378,19 +383,43 @@ export async function handlePrepareSwapTransactions(
 
 export function getInvestmentBreakdown(
   solution: string,
-  amount: number
+  amount: number,
+  myAptosWalletAccount: any,
 ): InvestmentBreakdown | null {
-  const tokensData = loadTokens();
-  const goodTokensData = filterTokens(tokensData);
-  let tokenMcaps = getMarketTokenMcap(goodTokensData);
+  let tokensData: TokenData[] = [];
+  let goodTokensData: TokenData[] = [];
+  let tokenMcaps = {};
+  if (myAptosWalletAccount) {
+    tokensData = loadAptosTokens();
+    goodTokensData = filterNonStableTokens(tokensData);
+    tokenMcaps = getAptosMarketTokenMcap(goodTokensData);
+  } else {
+    tokensData = loadTokens();
+    goodTokensData = filterTokens(tokensData);
+    tokenMcaps = getMarketTokenMcap(goodTokensData);
+  }
   let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
-  sortedTokens = sortedTokens.slice(0, 15);
-  let sortedTokensData = filterTokens(goodTokensData, sortedTokens);
-  const tokenPrices = getMarketTokenPrice(sortedTokensData);
+  sortedTokens = sortedTokens.slice(0, 15); // keep only max top 15 by Mcap
+  let sortedTokensData;
+  let tokenPrices;
+  if (myAptosWalletAccount) {
+    // sort goodTokensData by sortedTokens ?? why ?
+    sortedTokensData = goodTokensData;
+    tokenPrices = getAptosMarketTokenPrice(sortedTokensData);
+  } else {
+    sortedTokensData = filterTokens(goodTokensData, sortedTokens);
+    tokenPrices = getMarketTokenPrice(sortedTokensData);
+  }
+
   let tokenEMA7Hourly: Record<string, number> = {};
   let tokenMaxStdDev: Record<string, number> = {};
   for (const token of sortedTokens) {
-    const tokenPriceHistory = extractPrices(sortedTokensData, token);
+    let tokenPriceHistory;
+    if (myAptosWalletAccount) {
+      tokenPriceHistory = extractAptosPrices(sortedTokensData, token);
+    } else {
+      tokenPriceHistory = extractPrices(sortedTokensData, token);
+    }
     try {
       const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
       tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
@@ -421,7 +450,7 @@ export function getInvestmentBreakdown(
   sortedTokens = sortedTokens.slice(0, n_tokens);
   tokenEMA7Hourly = Object.fromEntries(sortedTokens.map(token => [token, tokenEMA7Hourly[token]]));
   tokenMaxStdDev = Object.fromEntries(sortedTokens.map(token => [token, tokenMaxStdDev[token]]));
-  sortedTokensData = filterTokens(sortedTokensData, sortedTokens);
+  //sortedTokensData = filterTokens(sortedTokensData, sortedTokens);
   const alpha = k_alpha * Math.log(k_mini) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]));
   let tokenDistribution: Record<string, number> = {};
   for (const token in tokenEMA7Hourly) {
@@ -512,6 +541,13 @@ export async function connectAptosWallet(
 }
 
 export async function getMarketAptos(): Promise<Record<string, any>> {
+    // if mode debug, load from localStorage
+    if (MODE_DEBUG) {
+        const storedTokens = localStorage.getItem('aptosTokens');
+        if (storedTokens) {
+            return JSON.parse(storedTokens);
+        }
+    }
     // get hyperion pools
     const sdk = initHyperionSDK({
         network: Network.MAINNET, 
@@ -562,6 +598,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                       marketCap: data_cg[token_id]["usd_market_cap"],
                       aptosTvl: tvlUSD,
                       address: tokenAddress,
+                      token_id: token_id,
                   };
               }
           }
@@ -641,8 +678,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                     current_price = data_cg_token[0]["current_price"];
                 } else {
                     console.log("skip : token not found on coingecko", tokenToAdd.symbol);
-                    marketcap_usd = 0;
-                    current_price = 0;
+                    continue;
         
                 }
 
@@ -651,16 +687,43 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                   ? pools_token[0].pool.token1
                   : pools_token[0].pool.token2;
 
-                marketAptos[tokenToAdd.symbol] = {
-                    currentPrice: current_price,
-                    marketCap: marketcap_usd,
-                    aptosTvl: tvlUSD,
-                    address: tokenAddress,
-                };
+              marketAptos[tokenToAdd.symbol] = {
+                  currentPrice: current_price,
+                  marketCap: marketcap_usd,
+                  aptosTvl: tvlUSD,
+                  address: tokenAddress,
+                  token_id: data_cg_token[0].id,
+              };
             }
         }
 
     }
+
+    // get prices range on last 90 days on CoinGecko
+    for (const token in marketAptos) {
+        const token_id = marketAptos[token].token_id;
+        const url = `https://api.coingecko.com/api/v3/coins/${token_id}/market_chart?vs_currency=usd&days=30`;
+        const options = {
+            method: 'GET',
+            headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey },
+            body: undefined,
+        };
+        // pause for 1 second to avoid rate limit
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const res_cg = await fetch(url, options);
+        const data_cg = await res_cg.json();
+        if (data_cg && data_cg.prices) {
+
+          // from data_cg.prices : array of [timestamp, price]
+          // extract timestamp and prices in this format : array of {date: timestamp, value: price}
+          const prices_90d = data_cg.prices.map((price: number[]) => ({
+              date: price[0],
+              value: price[1]
+          }));
+          marketAptos[token]["linePriceFeedInUsd"] = prices_90d;
+        }
+    }
+
     console.log(marketAptos);
     localStorage.setItem('aptosTokens', JSON.stringify(marketAptos));
     return marketAptos;
