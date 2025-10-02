@@ -382,10 +382,13 @@ function App() {
       <header className="app-header">
         <h1>Automatic Balanced Bag by AI</h1>
         <p>
-          Rebalance your <a href="https://starkware.co/starknet/" target="_blank" rel="noopener noreferrer">StarkNet</a> portfolio using AI-powered strategies.
+          Rebalance your Wallet Portfolio using AI-powered strategies.
         </p>
-        <p> <i>Powered by <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">AVNU Finance</a> and{' '}
-          <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">Brian AI Agent</a>.
+        <p> <i>Aptos : Powered by <a href="https://hyperion.xyz/" target="_blank" rel="noopener noreferrer">Hyperion</a> and{' '}
+          <a href="https://scrt.network/secret-ai" target="_blank" rel="noopener noreferrer">Secrect AI (Secret Network)</a>.
+        </i></p>
+        <p> <i>Starknet : Powered by <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">AVNU Finance</a> and{' '}
+          <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">Brian AI Agent (discountinued)</a>.
         </i></p>
       </header>
 
