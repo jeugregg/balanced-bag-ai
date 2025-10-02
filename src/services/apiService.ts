@@ -41,6 +41,26 @@ const hyper_sdk = initHyperionSDK({
     APTOS_API_KEY: aptosApiKey
 });
 
+// --- GLOBAL CORS SOLUTION FOR COINGECKO ---
+// Use a proxy for CoinGecko requests to avoid CORS issues in development.
+// This function rewrites CoinGecko URLs to go through a local proxy.
+// In production, you should use a backend or a CORS-enabled third-party API.
+
+function coingeckoProxyUrl(url: string): string {
+  // If running locally, rewrite to use Vite proxy (see vite.config.ts)
+  // Example: /coingecko/api/v3/...
+  if (url.startsWith("https://api.coingecko.com")) {
+    return url.replace("https://api.coingecko.com", "/coingecko");
+  }
+  return url;
+}
+
+// Use this helper for all CoinGecko fetches
+async function fetchCoinGecko(url: string, options: RequestInit): Promise<any> {
+  const proxiedUrl = coingeckoProxyUrl(url);
+  return fetch(proxiedUrl, options);
+}
+
 export async function getMarket(): Promise<TokenData[] | null> {
   const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', {
     method: 'GET',
@@ -390,6 +410,7 @@ export async function prepareSwapTransactions(
         //const currencyAAmount = Math.pow(10,7)
         // calculate amount token 1 (swap.sell) to swap to token 2 (swap.buy) with USD amount = swap.amount
         const currencyAAmount = Math.floor(swap.amount / tokens[swap.sell]["currentPrice"] * (10 ** tokens[swap.sell]["decimals"]));
+
         const { amountOut: currencyBAmount, path: poolRoute} = await hyper_sdk.Swap.estToAmount({
           amount: currencyAAmount,
           from: tokens[swap.sell].address,
@@ -399,18 +420,8 @@ export async function prepareSwapTransactions(
           // default: true. support from (v0.0.12)
           safeMode: false
         });
-        /*
-        {
-          
-          "amountOut": "10000000", // This is for toAmount
-          "amountIn": "1279371", // This is for fromAmount
-          
-          // swap path route
-          "path": [
-            "0x0d21c2f5628db619957703e90ab07bcb2b13ad6983da2b5d721f24523cae29ff"
-          ]
-        }
-        */
+
+        const newCurrencyBAmount = Math.floor(swap.amount / tokens[swap.buy]["currentPrice"] * (10 ** tokens[swap.buy]["decimals"]));
 
         const params = {
           // here must be fa type
@@ -418,15 +429,26 @@ export async function prepareSwapTransactions(
           currencyB: tokens[swap.buy].address,
           currencyAAmount,
           currencyBAmount,
-          slippage: 0.5,
+          slippage: 1,
           poolRoute,
-          recipient: '',
+          recipient: walletAddress, // '',
         };
 
-        const payload = await hyper_sdk.Swap.swapTransactionPayload(params);
+        let payload = await hyper_sdk.Swap.swapTransactionPayload(params);
         console.log(payload);
 
-        const transaction = await aptos.transaction.build.simple({
+        payload['functionArguments'][4] = newCurrencyBAmount;
+        // send transaction with aptosWallet
+        // 1. Build the transaction to preview the impact of it
+        let transaction = await aptos.transaction.build.simple({
+          sender: walletAddress,
+          data: payload,
+        });
+
+        console.log(transaction);
+        
+        // BUILD OK HERE :
+        const transaction0 = await aptos.transaction.build.simple({
           sender: walletAddress,
           data: {
           // All transactions on Aptos are implemented via smart contracts.
@@ -435,26 +457,26 @@ export async function prepareSwapTransactions(
           },
         });
         console.log(transaction);
-
-        const response = await myAptosWalletAccount.signAndSubmitTransaction({data: payload});
-        console.log(response);
-
-        // send transaction with aptosWallet
-        /* // 1. Build the transaction to preview the impact of it
-        const transaction = await aptos.transaction.build.simple({
-          sender: walletAddress,
-          data: payload,
-        });
-        console.log(transaction);
+        //transaction['rawTransaction']['payload']["entryFunction"]["args"][4].value = BigInt(newCurrencyBAmount);
+        //transaction['rawTransaction']['payload']["entryFunction"]["args"] = transaction['rawTransaction']['payload']["entryFunction"]["args"].slice(0,3);
         // 2. Simulate to see what would happen if we execute this transaction
         const [userTransactionResponse] = await aptos.transaction.simulate.simple({
             signerPublicKey: myAptosWalletAccount.publicKey,
             transaction,
         });
-        console.log(userTransactionResponse); */
+        console.log(userTransactionResponse);
+        //transaction['rawTransaction']['payload']["entryFunction"]["args"][5] = "";
+        //payload['functionArguments'][5] = "";
+        payload['functionArguments'] = payload['functionArguments'].slice(0,4);
+        const response = await myAptosWalletAccount.signAndSubmitTransaction({data: payload});
+        console.log(response);
+        
+        
+
       }
 
      } catch (error: any) {
+      console.error("Error preparing swap:", error);
       setErrorWithTimeout(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
       allTransactionsSuccessful = false;
       newSwapStatuses[i] = 'error';
@@ -656,9 +678,8 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
           method: 'GET',
           headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
       };
-      // pause for 1 second to avoid rate limit
       await new Promise(resolve => setTimeout(resolve, 1000));
-      const res_cg = await fetch(url, options);
+      const res_cg = await fetchCoinGecko(url, options);
       const data_cg = await res_cg.json();
       const index_token = poolItems.findIndex((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
       if (index_token != -1) {
@@ -755,9 +776,8 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                     method: 'GET',
                     headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
                 };
-                // pause for 1 second to avoid rate limit
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                const res_cg_token = await fetch(url_token, options_token);
+                const res_cg_token = await fetchCoinGecko(url_token, options_token);
                 const data_cg_token = await res_cg_token.json();
                 if (data_cg_token && data_cg_token.length > 0) {
                     marketcap_usd = data_cg_token[0]["market_cap"];
@@ -799,9 +819,8 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
             headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey },
             body: undefined,
         };
-        // pause for 1 second to avoid rate limit
         await new Promise(resolve => setTimeout(resolve, 1000));
-        const res_cg = await fetch(url, options);
+        const res_cg = await fetchCoinGecko(url, options);
         const data_cg = await res_cg.json();
         if (data_cg && data_cg.prices) {
 
