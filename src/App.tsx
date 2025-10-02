@@ -74,7 +74,7 @@ import {
   getMarket,
   askReduceList,
   fetchBalances,
-  handlePrepareSwapTransactions,
+  prepareSwapTransactions,
   handleSwapPrepare,
   getInvestmentBreakdown,
   connectStarknetWallet,
@@ -243,6 +243,28 @@ function App() {
       setMyAptosWalletAccount,
       setWalletAddress,
       setErrorWithTimeout
+    );
+  };
+
+  const handlePrepareSwapTransactions = async () => {
+    /*swapsToPrepare: Swap[],
+      setSwapStatuses: (statuses: string[]) => void,
+      setTransactionsCompleted: (completed: boolean) => void,
+      brian: BrianSDK,
+      walletAddress: string | null,
+      myWalletAccount: any,
+      myAptosWalletAccount: any,
+      setErrorWithTimeout: (msg: string) => void
+      */
+    await prepareSwapTransactions(
+      swapsToPrepare,
+      setSwapStatuses,
+      setTransactionsCompleted,
+      brian,
+      walletAddress,
+      myWalletAccount,
+      myAptosWalletAccount,
+      setErrorWithTimeout,
     );
   };
 
