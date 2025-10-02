@@ -35,6 +35,12 @@ import { TokenData, BalanceItem, InvestmentBreakdown, Swap } from "../App";
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
 const rcpApiKey = import.meta.env.VITE_RCP_API_KEY as string;
 const aptosApiKey = import.meta.env.VITE_APTOS_API_KEY as string;
+
+const hyper_sdk = initHyperionSDK({
+    network: Network.MAINNET, 
+    APTOS_API_KEY: aptosApiKey
+});
+
 export async function getMarket(): Promise<TokenData[] | null> {
   const response = await fetch('https://starknet.impulse.avnu.fi/v1/tokens', {
     method: 'GET',
@@ -323,15 +329,20 @@ export function handleSwapPrepare(
   setSwapsToPrepare(swaps);
 }
 
-export async function handlePrepareSwapTransactions(
+export async function prepareSwapTransactions(
   swapsToPrepare: Swap[],
   setSwapStatuses: (statuses: string[]) => void,
   setTransactionsCompleted: (completed: boolean) => void,
   brian: BrianSDK,
   walletAddress: string | null,
   myWalletAccount: any,
+  myAptosWalletAccount: any,
   setErrorWithTimeout: (msg: string) => void
 ) {
+  if (swapsToPrepare.length) {
+    console.log("Preparing swaps:", swapsToPrepare);
+  }
+
   setTransactionsCompleted(false);
   const newSwapStatuses = swapsToPrepare.map(() => 'pending');
   setSwapStatuses(newSwapStatuses);
@@ -343,40 +354,112 @@ export async function handlePrepareSwapTransactions(
     const swap = swapsToPrepare[i];
     const prompt = `Swap $${swap.amount.toFixed(2)} worth of '${swap.sell}' to '${swap.buy}' on Starknet`;
     try {
-      const brianResponse = await brian.transact({
-        prompt: prompt,
-        address: walletAddress,
-      });
-      if ((Number(brianResponse[0]["data"]["toAmountUSD"]) - Number(brianResponse[0]["data"]["fromAmountUSD"])) / Number(brianResponse[0]["data"]["fromAmountUSD"]) < -0.01) {
-        setErrorWithTimeout(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}`);
-        newSwapStatuses[i] = 'error';
-        setSwapStatuses([...newSwapStatuses]);
-        continue;
-      }
-      const extractedParams = brianResponse[0]["extractedParams"];
-      if (
-        extractedParams &&
-        extractedParams.action === "swap" &&
-        extractedParams.chain === "Starknet" &&
-        extractedParams.token1 === swap.sell &&
-        extractedParams.token2 === swap.buy
-      ) {
-        const txSteps = brianResponse[0]["data"]["steps"];
-        const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
-        await myWalletAccount.waitForTransaction(transferTxHash);
-        newSwapStatuses[i] = 'success';
-        setSwapStatuses([...newSwapStatuses]);
+      if (!myAptosWalletAccount) {
+        const brianResponse = await brian.transact({
+          prompt: prompt,
+          address: walletAddress,
+        });
+        if ((Number(brianResponse[0]["data"]["toAmountUSD"]) - Number(brianResponse[0]["data"]["fromAmountUSD"])) / Number(brianResponse[0]["data"]["fromAmountUSD"]) < -0.01) {
+          setErrorWithTimeout(`Price Impact too high preparing swap for ${swap.sell} to ${swap.buy}`);
+          newSwapStatuses[i] = 'error';
+          setSwapStatuses([...newSwapStatuses]);
+          continue;
+        }
+        const extractedParams = brianResponse[0]["extractedParams"];
+        if (
+          extractedParams &&
+          extractedParams.action === "swap" &&
+          extractedParams.chain === "Starknet" &&
+          extractedParams.token1 === swap.sell &&
+          extractedParams.token2 === swap.buy
+        ) {
+          const txSteps = brianResponse[0]["data"]["steps"];
+          const { transaction_hash: transferTxHash } = await myWalletAccount.execute(txSteps);
+          await myWalletAccount.waitForTransaction(transferTxHash);
+          newSwapStatuses[i] = 'success';
+          setSwapStatuses([...newSwapStatuses]);
+        } else {
+          setErrorWithTimeout("Unexpected response from Brian. Please check the console.");
+          newSwapStatuses[i] = 'error';
+          setSwapStatuses([...newSwapStatuses]);
+        }
       } else {
-        setErrorWithTimeout("Unexpected response from Brian. Please check the console.");
-        newSwapStatuses[i] = 'error';
-        setSwapStatuses([...newSwapStatuses]);
+        // Aptos swap logic here
+        //  using Hyperion SDK:
+        const tokens = loadAptosTokens();
+        //const currencyAAmount = Math.pow(10,7)
+        // calculate amount token 1 (swap.sell) to swap to token 2 (swap.buy) with USD amount = swap.amount
+        const currencyAAmount = Math.floor(swap.amount / tokens[swap.sell]["currentPrice"] * (10 ** tokens[swap.sell]["decimals"]));
+        const { amountOut: currencyBAmount, path: poolRoute} = await hyper_sdk.Swap.estToAmount({
+          amount: currencyAAmount,
+          from: tokens[swap.sell].address,
+          to: tokens[swap.buy].address,
+          // safeMode
+          // if safeMode is true, only few swap token pairs will return path route
+          // default: true. support from (v0.0.12)
+          safeMode: false
+        });
+        /*
+        {
+          
+          "amountOut": "10000000", // This is for toAmount
+          "amountIn": "1279371", // This is for fromAmount
+          
+          // swap path route
+          "path": [
+            "0x0d21c2f5628db619957703e90ab07bcb2b13ad6983da2b5d721f24523cae29ff"
+          ]
+        }
+        */
+
+        const params = {
+          // here must be fa type
+          currencyA: tokens[swap.sell].address,
+          currencyB: tokens[swap.buy].address,
+          currencyAAmount,
+          currencyBAmount,
+          slippage: 0.5,
+          poolRoute,
+          recipient: '',
+        };
+
+        const payload = await hyper_sdk.Swap.swapTransactionPayload(params);
+        console.log(payload);
+
+        const transaction = await aptos.transaction.build.simple({
+          sender: walletAddress,
+          data: {
+          // All transactions on Aptos are implemented via smart contracts.
+          function: "0x1::aptos_account::transfer",
+          functionArguments: [walletAddress, 100],
+          },
+        });
+        console.log(transaction);
+
+        const response = await myAptosWalletAccount.signAndSubmitTransaction({data: payload});
+        console.log(response);
+
+        // send transaction with aptosWallet
+        /* // 1. Build the transaction to preview the impact of it
+        const transaction = await aptos.transaction.build.simple({
+          sender: walletAddress,
+          data: payload,
+        });
+        console.log(transaction);
+        // 2. Simulate to see what would happen if we execute this transaction
+        const [userTransactionResponse] = await aptos.transaction.simulate.simple({
+            signerPublicKey: myAptosWalletAccount.publicKey,
+            transaction,
+        });
+        console.log(userTransactionResponse); */
       }
-    } catch (error: any) {
+
+     } catch (error: any) {
       setErrorWithTimeout(`Error preparing swap for ${swap.sell} to ${swap.buy}`);
       allTransactionsSuccessful = false;
       newSwapStatuses[i] = 'error';
       setSwapStatuses([...newSwapStatuses]);
-    }
+    } 
   }
   setTransactionsCompleted(allTransactionsSuccessful);
 }
@@ -549,12 +632,9 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
         }
     }
     // get hyperion pools
-    const sdk = initHyperionSDK({
-        network: Network.MAINNET, 
-        APTOS_API_KEY: aptosApiKey
-    });
 
-    const poolItems = await sdk.Pool.fetchAllPools();
+
+    const poolItems = await hyper_sdk.Pool.fetchAllPools();
     console.log("hyperion pools:", poolItems);
     let marketAptos: Record<string, any> = {};
     const tokens_default = [
