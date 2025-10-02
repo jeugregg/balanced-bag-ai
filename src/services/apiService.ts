@@ -4,7 +4,7 @@ import { initHyperionSDK } from '@hyperionxyz/sdk'
 import { Network, Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
 const aptosConfig = new AptosConfig({ network: Network.MAINNET });
 const aptos = new Aptos(aptosConfig);
-const MODE_DEBUG = true;
+const MODE_DEBUG = false;
 import { AptosJSProClient } from "@aptos-labs/js-pro";
 const aptosClient = new AptosJSProClient({
   network: { network: Network.MAINNET },
@@ -570,6 +570,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
     for (const token of tokens_default) {
       const token_symbol = token.symbol;
       const token_id = token.name;
+
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${token_id}&vs_currencies=usd&include_market_cap=true`;
       const options = {
           method: 'GET',
@@ -592,6 +593,10 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                   const tokenAddress = pools_token[0].pool.token1Info.symbol === token_symbol
                       ? pools_token[0].pool.token1
                       : pools_token[0].pool.token2;
+                  const decimals = pools_token[0].pool.token1Info.symbol === token_symbol
+                      ? pools_token[0].pool.token1Info.decimals
+                      : pools_token[0].pool.token2Info.decimals;
+                  // console.log("OK : add default token", token_symbol, "tvlUSD", tvlUSD, "decimals", decimals);
 
                   marketAptos[token_symbol] = {
                       currentPrice: data_cg[token_id]["usd"],
@@ -599,6 +604,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                       aptosTvl: tvlUSD,
                       address: tokenAddress,
                       token_id: token_id,
+                      decimals: decimals,
                   };
               }
           }
@@ -686,6 +692,10 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
               const tokenAddress = pools_token[0].pool.token1Info.symbol === tokenToAdd.symbol
                   ? pools_token[0].pool.token1
                   : pools_token[0].pool.token2;
+              const decimals = pools_token[0].pool.token1Info.symbol === tokenToAdd.symbol
+                  ? pools_token[0].pool.token1Info.decimals
+                  : pools_token[0].pool.token2Info.decimals;
+              // console.log("OK : add low cap token", tokenToAdd.symbol, "tvlUSD", tvlUSD, "decimals", decimals);
 
               marketAptos[tokenToAdd.symbol] = {
                   currentPrice: current_price,
@@ -693,6 +703,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                   aptosTvl: tvlUSD,
                   address: tokenAddress,
                   token_id: data_cg_token[0].id,
+                  decimals: decimals,
               };
             }
         }
