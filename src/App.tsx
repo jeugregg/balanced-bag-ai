@@ -222,7 +222,8 @@ function App() {
       setShowAptosWalletMsg,
       setMyAptosWalletAccount,
       setWalletAddress,
-      setErrorWithTimeout
+      setErrorWithTimeout,
+      setLoadingToken
     );
   };
 

@@ -621,7 +621,8 @@ export async function connectAptosWallet(
   setShowAptosWalletMsg: (show: boolean) => void,
   setMyAptosWalletAccount: (account: any) => void,
   setWalletAddress: (address: string) => void,
-  setErrorWithTimeout: (msg: string) => void
+  setErrorWithTimeout: (msg: string) => void,
+  setLoadingToken: (token: string | null) => void,
 ) {
     try {
         if (availableWallets.length === 0) {
@@ -639,7 +640,7 @@ export async function connectAptosWallet(
         }
         const walletAddress = aptosWallet.account.address.toString();
         setWalletAddress(walletAddress);
-        const marketAptos = await getMarketAptos();
+        const marketAptos = await getMarketAptos(setLoadingToken);
         console.log(marketAptos);
         localStorage.setItem('aptosTokens', JSON.stringify(marketAptos));
         setMyAptosWalletAccount(aptosWallet);
@@ -649,7 +650,9 @@ export async function connectAptosWallet(
     }
 }
 
-export async function getMarketAptos(): Promise<Record<string, any>> {
+export async function getMarketAptos(
+  setLoadingToken: (token: string | null) => void = () => {}
+): Promise<Record<string, any>> {
     // if mode debug, load from localStorage
     if (MODE_DEBUG) {
         const storedTokens = localStorage.getItem('aptosTokens');
@@ -675,6 +678,8 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
     // select default tokens in hyperion pools
     for (const token of tokens_default) {
       const token_symbol = token.symbol;
+      setLoadingToken(token_symbol); // Add loading indicator
+
       const token_id = token.name;
 
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${token_id}&vs_currencies=usd&include_market_cap=true`;
@@ -721,7 +726,10 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
       }
     }
 
-    // select other low cap tokens in hyperion pools
+    // After default tokens
+    setLoadingToken("Scanning pools...");
+    
+    // select other low cap tokens
     for (const pool of poolItems) {
         const token1 = pool.pool.token1Info;
         const token2 = pool.pool.token2Info;
@@ -768,6 +776,8 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
         // we can add it to the list of low cap pools
         const tokenToAdd = marketAptos[token1.symbol] ? token2 : token1;
         if (!marketAptos[tokenToAdd.symbol]) {
+            setLoadingToken(tokenToAdd.symbol); // Add loading indicator
+
             const pools_token = poolItems.filter((pool: any) => (pool.pool.token1Info.symbol === tokenToAdd.symbol) || (pool.pool.token2Info.symbol === tokenToAdd.symbol));
             if (pools_token.length > 1) {
                     let tvlUSD = 0;
