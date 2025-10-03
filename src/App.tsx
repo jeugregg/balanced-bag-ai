@@ -88,6 +88,8 @@ import {
   fetchAptosBalances,
 } from "./services/apiService";
 
+import { isDevelopment, isProduction } from './utils/environment';
+console.log("Environment Mode:", isDevelopment() ? "Development" : isProduction() ? "Production" : "Unknown");
 const mode_debug = false;
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
 
