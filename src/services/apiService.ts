@@ -562,7 +562,7 @@ export async function getInvestmentBreakdown(
       n_tokens = 10;
     } else if (solution === 'AI-Powered') {
 
-      const response = await callTogetherDistributionApi("token test");
+      const response = await callTogetherDistributionApi(tokenEMA7Hourly, tokenMaxStdDev);
       if (response) {
         console.log("Together response:", response);
         // Use the response data to adjust k_alpha, k_mini, and n_tokens
@@ -879,8 +879,8 @@ export async function getMarketAptos(
 
 
 // Together AI call for prefilling invoice data
-async function callTogetherDistributionApi(ocrResults: string): any[]  {
-    if (!ocrResults) throw new Error('OCR results are required');
+async function callTogetherDistributionApi(tokenEMA7Hourly: any[], tokenMaxStdDev: any[]): any[]  {
+    if (!tokenEMA7Hourly || !tokenMaxStdDev) throw new Error('Token data is required');
 
     const prefillSchema = z.object({
         k_alpha: z.number().describe('alpha parameter to adapt the distribution to market cap and momentum'),
@@ -902,7 +902,10 @@ async function callTogetherDistributionApi(ocrResults: string): any[]  {
         },
         {
             role: 'user',
-            content: ocrResults,
+            content: `Here is the data :
+                tokenEMA7Hourly: ${JSON.stringify(tokenEMA7Hourly)},
+                tokenMaxStdDev: ${JSON.stringify(tokenMaxStdDev)}
+                ` ,
         },
         ],
         model: modelTogether,
