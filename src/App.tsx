@@ -56,13 +56,18 @@
  */
 
 import React, { useState, useEffect, useRef, ChangeEvent } from "react";
-import './App.css';
+import "./App.css";
 import { WalletAccount } from "starknet";
 import { BrianSDK } from "@brian-ai/sdk";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { faGithub } from '@fortawesome/free-brands-svg-icons';
-import { groupAndSortWallets, useWallet, WalletContextState } from "@aptos-labs/wallet-adapter-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faSpinner } from "@fortawesome/free-solid-svg-icons";
+import { faGithub } from "@fortawesome/free-brands-svg-icons";
+import {
+  groupAndSortWallets,
+  useWallet,
+  WalletContextState,
+} from "@aptos-labs/wallet-adapter-react";
+
 import WalletConnectButtons from "./components/WalletConnectButtons";
 import ErrorMessageBox from "./components/ErrorMessageBox";
 import WalletBalances from "./components/WalletBalances";
@@ -70,6 +75,7 @@ import InvestmentBreakdown from "./components/InvestmentBreakdown";
 import SwapTable from "./components/SwapTable";
 import BrianBalancesTable from "./components/BrianBalancesTable";
 import InvestmentStrategyButtons from "./components/InvestmentStrategyButtons";
+
 import {
   getMarket,
   askReduceList,
@@ -83,22 +89,7 @@ import {
 } from "./services/apiService";
 
 const mode_debug = false;
-
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
-
-interface TokenData {
-  position: number;
-  name: string;
-  symbol: string;
-  address: string;
-  decimals: number;
-  market: {
-    currentPrice: number;
-    marketCap: number;
-    starknetTvl: number;
-  };
-  linePriceFeedInUsd?: { value: number }[];
-}
 
 interface BalanceItem {
   token: string;
@@ -106,27 +97,17 @@ interface BalanceItem {
   price: number;
   total: number;
 }
-
-interface InvestmentBreakdown {
+interface InvestmentBreakdownMap {
   [token: string]: {
     amount: number;
     percentage: number;
   };
 }
-
 interface Swap {
   sell: string;
   buy: string;
   amount: number;
 }
-
-const tokenAddresses_default: Record<string, string> = {
-  ETH: "0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7",
-  STRK: "0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D",
-  USDC: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
-  USDT: "0x068F5c6a61780768455de69077E07e89787839bf8166dEcfBf92B645209c0fB8",
-  WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac"
-};
 
 const ethAmountToKeep = 2;
 
@@ -134,96 +115,93 @@ function App() {
   const [myWalletAccount, setMyWalletAccount] = useState<WalletAccount | null>(null);
   const [myAptosWalletAccount, setMyAptosWalletAccount] = useState<WalletContextState | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  //const [aptosWalletAddress, setAptosWalletAddress] = useState<string | null>(null);
+
   const [walletBalances, setWalletBalances] = useState<BalanceItem[]>([]);
   const [balances, setBalances] = useState<BalanceItem[]>([]);
   const [balancesWithBrian, setBalancesWithBrian] = useState<Record<string, number>[] | null>(null);
+
   const [error, setError] = useState<string | null>(null);
-  const [errorColor, setErrorColor] = useState<string>('blue');
+  const [errorColor, setErrorColor] = useState<string>("blue");
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showErrorContainer, setShowErrorContainer] = useState<boolean>(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [totalWalletValue, setTotalWalletValue] = useState<number>(0);
   const [investmentAmount, setInvestmentAmount] = useState<string>("");
-  const [selectedSolution, setSelectedSolution] = useState<string>('Balanced');
-  const [investmentBreakdown, setInvestmentBreakdown] = useState<InvestmentBreakdown | null>(null);
+
+  const [selectedSolution, setSelectedSolution] = useState<string>("Balanced");
+  const [investmentBreakdown, setInvestmentBreakdown] = useState<InvestmentBreakdownMap | null>(null);
+
   const [swapsToPrepare, setSwapsToPrepare] = useState<Swap[]>([]);
   const [transactionsCompleted, setTransactionsCompleted] = useState<boolean>(false);
   const [swapStatuses, setSwapStatuses] = useState<string[]>([]);
   const [loadingToken, setLoadingToken] = useState<string | null>(null);
   const [showAptosWalletMsg, setShowAptosWalletMsg] = useState(false);
 
-  // Access the API key from environment variables
+  // SDK & Wallets
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
   const rcpApiKey = import.meta.env.VITE_RCP_API_KEY;
-  const options = {
-    apiKey: brianApiKey,
-  };
-  const brian = new BrianSDK(options);
-  const aptosWallet = useWallet(); // <-- Move hook here
-  
-  const { aptosConnectWallets, availableWallets, installableWallets } =
-            groupAndSortWallets(
-            [...aptosWallet.wallets, ...aptosWallet.notDetectedWallets]
-  );
+  const brian = new BrianSDK({ apiKey: brianApiKey });
 
-  // Updated setError function to handle color change and timeout
+  const aptosWallet = useWallet();
+  const { aptosConnectWallets, availableWallets, installableWallets } = groupAndSortWallets([
+    ...aptosWallet.wallets,
+    ...aptosWallet.notDetectedWallets,
+  ]);
+
+  // Error helper
   const setErrorWithTimeout = (errorMessage: string) => {
     setError(errorMessage);
-    setErrorColor('red');
-    setShowErrorContainer(true); // Show the container
-    clearTimeout(errorTimeoutRef.current);
+    setErrorColor("red");
+    setShowErrorContainer(true);
+    clearTimeout(errorTimeoutRef.current as any);
     errorTimeoutRef.current = setTimeout(() => {
-      setErrorColor('blue');
-      setShowErrorContainer(false); // Hide the container after 5 seconds
+      setErrorColor("blue");
+      setShowErrorContainer(false);
     }, 5000);
   };
 
+  // Handlers
   const handleSolutionSelect = (solution: string) => {
     setSelectedSolution(solution);
     const breakdown = getInvestmentBreakdown(solution, parseFloat(investmentAmount), myAptosWalletAccount);
     setInvestmentBreakdown(breakdown);
   };
 
-
   const handleInvestmentInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let inputValue = e.target.value;
+    let inputValue: any = e.target.value;
 
-    // Check if input ends with '%' (percentage)
-    if (inputValue.endsWith('%')) {
-      const percentage = parseFloat(inputValue.slice(0, -1)) / 100;
-      inputValue = (totalWalletValue * percentage);
+    if (String(inputValue).endsWith("%")) {
+      const percentage = parseFloat(String(inputValue).slice(0, -1)) / 100;
+      inputValue = totalWalletValue * percentage;
     } else {
-      // If it's a number, ensure it doesn't exceed the total wallet value
       const amount = parseFloat(inputValue);
-      if (amount > totalWalletValue - 0) {
-        inputValue = totalWalletValue - 0;
-      }
+      if (amount > totalWalletValue - 0) inputValue = totalWalletValue - 0;
     }
 
     setInvestmentAmount(inputValue);
 
-    const newBalances = walletBalances.map(item => ({
+    const newBalances = walletBalances.map((item) => ({
       ...item,
-      balance: (item.balance / totalWalletValue) * inputValue, // Adjust balance proportionally
-      total: (item.total / totalWalletValue) * inputValue   // Adjust total proportionally
+      balance: (item.balance / totalWalletValue) * Number(inputValue),
+      total: (item.total / totalWalletValue) * Number(inputValue),
     }));
     setBalances(newBalances);
   };
 
   const handlePercentageSelect = (percentage: number) => {
-    let maxAmountToInvest = totalWalletValue - 0;
-    let amount = Math.min(totalWalletValue * (percentage / 100), maxAmountToInvest).toFixed(5);
+    const maxAmountToInvest = totalWalletValue - 0;
+    const amount = Math.min(totalWalletValue * (percentage / 100), maxAmountToInvest).toFixed(5);
     setInvestmentAmount(amount);
-    // update balances with same percentage
-    // Update balances proportionally based on the percentage
-    const newBalances = walletBalances.map(item => ({
+
+    const newBalances = walletBalances.map((item) => ({
       ...item,
-      balance: (item.balance / totalWalletValue) * amount, // Adjust balance proportionally
-      total: (item.total / totalWalletValue) * amount   // Adjust total proportionally
+      balance: (item.balance / totalWalletValue) * Number(amount),
+      total: (item.total / totalWalletValue) * Number(amount),
     }));
     setBalances(newBalances);
   };
+
   const handleConnectWallet = async () => {
     await connectStarknetWallet(
       rcpApiKey,
@@ -247,15 +225,6 @@ function App() {
   };
 
   const handlePrepareSwapTransactions = async () => {
-    /*swapsToPrepare: Swap[],
-      setSwapStatuses: (statuses: string[]) => void,
-      setTransactionsCompleted: (completed: boolean) => void,
-      brian: BrianSDK,
-      walletAddress: string | null,
-      myWalletAccount: any,
-      myAptosWalletAccount: any,
-      setErrorWithTimeout: (msg: string) => void
-      */
     await prepareSwapTransactions(
       swapsToPrepare,
       setSwapStatuses,
@@ -264,46 +233,38 @@ function App() {
       walletAddress,
       myWalletAccount,
       myAptosWalletAccount,
-      setErrorWithTimeout,
+      setErrorWithTimeout
     );
   };
 
   const handleDisconnectWallet = () => {
-    // Reset state variables related to the wallet
     setMyWalletAccount(null);
     setWalletAddress(null);
-    setWalletBalances({});
-    setBalances({});
-    setIsLoading(true); // Optionally set isLoading to true while balances are cleared
+    setWalletBalances([]); // important: vider avec []
+    setBalances([]);       // important: vider avec []
+    setIsLoading(true);
   };
+
   const handleReloadBalances = async () => {
     setIsLoading(true);
     setInvestmentBreakdown(null);
-    setSelectedSolution('Balanced');
+    setSelectedSolution("Balanced");
     setSwapsToPrepare([]);
     setTransactionsCompleted(false);
     setSwapStatuses([]);
-    setWalletBalances({}); // Clear wallet balances
-    setBalances({});        // Clear balances
+    setWalletBalances([]); // vider
+    setBalances([]);       // vider
 
     if (mode_debug !== true) {
       const market = await getMarket();
-      if (market === null) {
-        setErrorWithTimeout("No price feed");
-      }
-      console.log("market:", market);
+      if (market === null) setErrorWithTimeout("No price feed");
     }
 
-    const listReducedTokens = await askReduceList();
-    console.log("listReducedTokens:", listReducedTokens);
-
-    // After clearing, immediately start fetching new balances
-    if (walletAddress && myWalletAccount) {
-      await fetchBalances();
-    }
+    await askReduceList();
+    if (walletAddress && myWalletAccount) await fetchBalances();
   };
 
-
+  // Effects
   useEffect(() => {
     fetchBalances(
       walletAddress,
@@ -316,8 +277,6 @@ function App() {
       setLoadingToken,
       setErrorWithTimeout
     );
-    // Optionally, fetch Brian balances:
-    // fetchBalancesWithBrian(walletAddress, myWalletAccount, setBalancesWithBrian, setErrorWithTimeout);
   }, [myWalletAccount]);
 
   useEffect(() => {
@@ -332,86 +291,87 @@ function App() {
       setLoadingToken,
       setErrorWithTimeout
     );
-    // Optionally, fetch Brian balances:
-    // fetchBalancesWithBrian(walletAddress, myWalletAccount, setBalancesWithBrian, setErrorWithTimeout);
   }, [myAptosWalletAccount]);
 
   useEffect(() => {
-    if (investmentBreakdown) {
-      handleSwapPrepare(balances, investmentBreakdown, setSwapsToPrepare);
-    }
+    if (investmentBreakdown) handleSwapPrepare(balances, investmentBreakdown, setSwapsToPrepare);
   }, [investmentBreakdown]);
 
   useEffect(() => {
     if (investmentAmount && selectedSolution) {
-      const breakdown = getInvestmentBreakdown(selectedSolution, parseFloat(investmentAmount), myAptosWalletAccount);
+      const breakdown = getInvestmentBreakdown(
+        selectedSolution,
+        parseFloat(investmentAmount),
+        myAptosWalletAccount
+      );
       setInvestmentBreakdown(breakdown);
     } else {
       setInvestmentBreakdown(null);
     }
   }, [investmentAmount, selectedSolution]);
 
-  // For swap transactions:
-  // Replace local handlePrepareSwapTransactions with imported version:
-  // handlePrepareSwapTransactions(swapsToPrepare, setSwapStatuses, setTransactionsCompleted, brian, walletAddress, myWalletAccount, setErrorWithTimeout);
+  // Charts data
+  const pieChartData = investmentBreakdown
+    ? Object.entries(investmentBreakdown).map(([token, data]) => ({
+        name: token,
+        value: data.percentage,
+      }))
+    : [];
 
-  const pieChartData = investmentBreakdown ? Object.entries(investmentBreakdown).map(([token, data]) => ({
-    name: token,
-    value: data.percentage
-  })) : [];
+  const pieChartDataBalances =
+    !isLoading && Array.isArray(balances)
+      ? balances.map((item) => ({ name: item.token, value: parseFloat(String(item.total)) }))
+      : [];
 
-
-  const pieChartDataBalances = !isLoading && Array.isArray(balances) ? balances.map((item) => ({
-    name: item.token,
-    value: parseFloat(item.total)
-  })) : [];
-
-
-  // Expanded color palette with 15 colors
+  // Palette
   const COLORS = [
-    '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#D9D9D9',
-    '#82ca9d', '#a4de6c', '#d0ed57', '#ffc658', '#ff9830', '#ff6f00',
-    '#e91e63', '#9c27b0', '#673ab7'
+    "#0088FE",
+    "#00C49F",
+    "#FFBB28",
+    "#FF8042",
+    "#AF19FF",
+    "#D9D9D9",
+    "#82ca9d",
+    "#a4de6c",
+    "#d0ed57",
+    "#ffc658",
+    "#ff9830",
+    "#ff6f00",
+    "#e91e63",
+    "#9c27b0",
+    "#673ab7",
   ];
-
-
-  useEffect(() => {
-    // Call handleSwapPrepare whenever investmentBreakdown changes and is not null
-    if (investmentBreakdown) {
-      handleSwapPrepare(balances, investmentBreakdown, setSwapsToPrepare);
-    }
-  }, [investmentBreakdown]
-  );
-
-  useEffect(() => {
-    // Update investment breakdown whenever investmentAmount changes
-    if (investmentAmount && selectedSolution) {
-      const breakdown = getInvestmentBreakdown(selectedSolution, parseFloat(investmentAmount), myAptosWalletAccount);
-      setInvestmentBreakdown(breakdown);
-    } else {
-      setInvestmentBreakdown(null); // Clear breakdown if no amount or solution selected
-    }
-  }, [investmentAmount, selectedSolution]
-  );
-
-  /* useEffect(() => {
-    fetchBalances();
-  }, [walletAddress, myWalletAccount]); */
 
   return (
     <div>
       {/* Header */}
       <header className="app-header">
         <h1>Automatic Balanced Bag by AI</h1>
+        <p>Rebalance your Wallet Portfolio using AI-powered strategies.</p>
         <p>
-          Rebalance your Wallet Portfolio using AI-powered strategies.
+          <i>
+            Aptos : Powered by{" "}
+            <a href="https://hyperion.xyz/" target="_blank" rel="noopener noreferrer">
+              Hyperion
+            </a>{" "}
+            and{" "}
+            <a href="https://scrt.network/secret-ai" target="_blank" rel="noopener noreferrer">
+              Secrect AI (Secret Network)
+            </a>.
+          </i>
         </p>
-        <p> <i>Aptos : Powered by <a href="https://hyperion.xyz/" target="_blank" rel="noopener noreferrer">Hyperion</a> and{' '}
-          <a href="https://scrt.network/secret-ai" target="_blank" rel="noopener noreferrer">Secrect AI (Secret Network)</a>.
-        </i></p>
-        <p> <i>Starknet : Powered by <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">AVNU Finance</a> and{' '}
-          <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">Brian AI Agent (discountinued)</a>.
-        </i></p>
+        <p>
+          <i>
+            Starknet : Powered by{" "}
+            <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">
+              AVNU Finance
+            </a>{" "}
+            and{" "}
+            <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">
+              Brian AI Agent (discountinued)
+            </a>.
+          </i>
+        </p>
       </header>
 
       <ErrorMessageBox
@@ -422,101 +382,160 @@ function App() {
         setShowAptosWalletMsg={setShowAptosWalletMsg}
       />
 
-      <div className="app-content">
+      <main className="app-content">
         <h2>Beta Version - 0.0.2 - Starknet & Aptos</h2>
-        {walletAddress ? (
-          <>
-            <h4>Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}</h4>
-            <button onClick={handleDisconnectWallet}>Log Out</button>
-            {/* <button onClick={handleReloadBalances} className="reload-button"> */}
-            {/*   <FontAwesomeIcon icon={faSyncAlt} /> {/* Use the reload icon */}
-            {/* </button> */}
-            <h3>
-              Wallet balance to invest
-            </h3>
-            {/* Investment Input Section */}
-            {totalWalletValue > 0 && (
-              <div>
-                <label htmlFor="investmentInput">
-                  Choose Wallet Amount: $
-                </label>
-                <input
-                  type="text"
-                  id="investmentInput"
-                  value={investmentAmount}
-                  onChange={handleInvestmentInputChange} // Use the new handler
-                  className="investment-input"
-                />
-                {/* Percentage Buttons */}
-                <div>
-                  <button onClick={() => handlePercentageSelect(25)}>25%</button>
-                  <button onClick={() => handlePercentageSelect(50)}>50%</button>
-                  <button onClick={() => handlePercentageSelect(100)}>100%</button>
-                </div>
+
+        {/* ============ STEP 1 ============ */}
+        <section className="step-section">
+          <div className="step-head">
+            <div className="step-badge">1</div>
+            <div className="step-title">
+              <div className="kicker">Step 1</div>
+              <h3>Login & Wallet balance to invest</h3>
+              <div className="step-desc">
+                Connecte ton wallet et choisis un montant (ou 25 / 50 / 100%).
               </div>
-            )}
-            {isLoading ? (
-              <div className="loading-container">
-                <FontAwesomeIcon icon={faSpinner} spin />
-                <p>Loading balances... {loadingToken}</p>
+            </div>
+          </div>
+
+          <div className="step-body">
+            {!walletAddress ? (
+              <div className="card" style={{ margin: 0 }}>
+                <WalletConnectButtons
+                  handleConnectWallet={handleConnectWallet}
+                  handleConnectAptosWallet={handleConnectAptosWallet}
+                />
               </div>
             ) : (
-              <WalletBalances
-                balances={balances}
-                isLoading={isLoading}
-                loadingToken={loadingToken}
-                totalWalletValue={totalWalletValue}
-                walletBalances={walletBalances}
-                investmentAmount={investmentAmount}
-                handleInvestmentInputChange={handleInvestmentInputChange}
-                handlePercentageSelect={handlePercentageSelect}
-                pieChartDataBalances={pieChartDataBalances}
-                COLORS={COLORS}
-              />
-            )}
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <h4 style={{ margin: 0 }}>
+                    Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}
+                  </h4>
+                  <button onClick={handleDisconnectWallet}>Log Out</button>
+                </div>
 
-            {/* Conditionally display Total Wallet Value */}
-            {totalWalletValue > 0 && (
-              <p>Total Wallet Value: ${totalWalletValue.toFixed(5)}</p>
+                <div style={{ marginTop: 12 }}>
+                  <h3 style={{ margin: "8px 0" }}>Wallet balance to invest</h3>
+
+                  {totalWalletValue > 0 && (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <label htmlFor="investmentInput">Choose Wallet Amount: $</label>
+                      <input
+                        type="text"
+                        id="investmentInput"
+                        value={investmentAmount}
+                        onChange={handleInvestmentInputChange}
+                        className="investment-input"
+                      />
+
+                      {/* Groupe de boutons 25/50/100 (espacement 3px) */}
+                      <div className="btn-group">
+                        <button onClick={() => handlePercentageSelect(25)} className="btn btn--chip">25%</button>
+                        <button onClick={() => handlePercentageSelect(50)} className="btn btn--chip">50%</button>
+                        <button onClick={() => handlePercentageSelect(100)} className="btn btn--chip">100%</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {isLoading ? (
+                    <div className="loading-container" style={{ gap: 10 }}>
+                      <FontAwesomeIcon icon={faSpinner} spin />
+                      <p>Loading balances... {loadingToken}</p>
+                    </div>
+                  ) : (
+                    <WalletBalances
+                      balances={balances}
+                      isLoading={isLoading}
+                      loadingToken={loadingToken}
+                      totalWalletValue={totalWalletValue}
+                      walletBalances={walletBalances}
+                      investmentAmount={investmentAmount}
+                      handleInvestmentInputChange={handleInvestmentInputChange}
+                      handlePercentageSelect={handlePercentageSelect}
+                      pieChartDataBalances={pieChartDataBalances}
+                      COLORS={COLORS}
+                    />
+                  )}
+
+                  {totalWalletValue > 0 && (
+                    <p style={{ marginTop: 8 }}>Total Wallet Value: ${totalWalletValue.toFixed(5)}</p>
+                  )}
+
+                  <BrianBalancesTable balancesWithBrian={balancesWithBrian} />
+                </div>
+              </>
             )}
-            <BrianBalancesTable balancesWithBrian={balancesWithBrian} />
+          </div>
+        </section>
+
+        {/* ============ STEP 2 ============ */}
+        <section className={`step-section ${!walletAddress || !totalWalletValue ? "step--disabled" : ""}`}>
+          <div className="step-head">
+            <div className="step-badge">2</div>
+            <div className="step-title">
+              <div className="kicker">Step 2</div>
+              <h3>Choose your investment strategy</h3>
+              <div className="step-desc">
+                Sélectionne Secure / Balanced / Offensive et vérifie la répartition.
+              </div>
+            </div>
+          </div>
+
+          <div className="step-body">
             <InvestmentStrategyButtons
               isLoading={isLoading}
               totalWalletValue={totalWalletValue}
               selectedSolution={selectedSolution}
               handleSolutionSelect={handleSolutionSelect}
             />
-            {investmentBreakdown && (
-              <>
-                <InvestmentBreakdown
-                  investmentBreakdown={investmentBreakdown}
-                  pieChartData={pieChartData}
-                  COLORS={COLORS}
-                />
-                <SwapTable
-                  swapsToPrepare={swapsToPrepare}
-                  swapStatuses={swapStatuses}
-                  handlePrepareSwapTransactions={handlePrepareSwapTransactions}
-                />
-              </>
-            )}
 
-          </>
-        ) : (
-          <WalletConnectButtons
-            handleConnectWallet={handleConnectWallet}
-            handleConnectAptosWallet={handleConnectAptosWallet}
-          />
-        )}
-      </div>
+            {investmentBreakdown && (
+              <InvestmentBreakdown
+                investmentBreakdown={investmentBreakdown}
+                pieChartData={pieChartData}
+                COLORS={COLORS}
+              />
+            )}
+          </div>
+        </section>
+
+        {/* ============ STEP 3 ============ */}
+        <section className={`step-section ${!investmentBreakdown ? "step--disabled" : ""}`}>
+          <div className="step-head">
+            <div className="step-badge">3</div>
+            <div className="step-title">
+              <div className="kicker">Step 3</div>
+              <h3>Swap all for rebalancing</h3>
+              <div className="step-desc">Prépare et exécute les swaps pour atteindre la cible.</div>
+            </div>
+          </div>
+
+          <div className="step-body">
+            {investmentBreakdown && (
+              <SwapTable
+                swapsToPrepare={swapsToPrepare}
+                swapStatuses={swapStatuses}
+                handlePrepareSwapTransactions={handlePrepareSwapTransactions}
+              />
+            )}
+          </div>
+        </section>
+      </main>
+
       {/* Footer */}
       <footer className="app-footer">
-
-        <a href="https://github.com/jeugregg/balanced-bag-ai" target="_blank" rel="noopener noreferrer" className="footer-text">
+        <a
+          href="https://github.com/jeugregg/balanced-bag-ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="footer-text"
+        >
           <FontAwesomeIcon icon={faGithub} className="footer-icon" /> GitHub Repository
-        </a> - 2025 - Built by jeugregg
+        </a>{" "}
+        - 2025 - Built by jeugregg
       </footer>
-    </div >
+    </div>
   );
 }
 
