@@ -37,3 +37,4 @@ yarn-error.log*
 # Optional: Ignore source maps for production
 /build/**/*.map
 /dist/**/*.map
+.env.production
