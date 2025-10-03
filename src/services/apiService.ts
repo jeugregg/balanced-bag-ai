@@ -422,7 +422,7 @@ export async function prepareSwapTransactions(
           safeMode: false
         });
 
-        const newCurrencyBAmount = Math.floor(swap.amount / tokens[swap.buy]["currentPrice"] * (10 ** tokens[swap.buy]["decimals"]));
+        const newCurrencyBAmount = Math.floor((1-0.5/100)*swap.amount / tokens[swap.buy]["currentPrice"] * (10 ** tokens[swap.buy]["decimals"]));
 
         const params = {
           // here must be fa type
@@ -430,7 +430,7 @@ export async function prepareSwapTransactions(
           currencyB: tokens[swap.buy].address,
           currencyAAmount,
           currencyBAmount,
-          slippage: 1,
+          slippage: 0.5,
           poolRoute,
           recipient: walletAddress, // '',
         };
@@ -468,12 +468,15 @@ export async function prepareSwapTransactions(
         console.log(userTransactionResponse);
         //transaction['rawTransaction']['payload']["entryFunction"]["args"][5] = "";
         //payload['functionArguments'][5] = "";
-        payload['functionArguments'] = payload['functionArguments'].slice(0,4);
+        //payload['functionArguments'] = payload['functionArguments'].slice(0,4);
+        //payload['function'] = "";
+        console.log(payload);
+
         const response = await myAptosWalletAccount.signAndSubmitTransaction({data: payload});
         console.log(response);
+        newSwapStatuses[i] = 'success';
+        setSwapStatuses([...newSwapStatuses]);
         
-        
-
       }
 
      } catch (error: any) {
@@ -691,13 +694,18 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                   tvlUSD += parseFloat(pool["tvlUSD"]);
               }
               if (tvlUSD > 50000) {
+                  if (token_symbol === "USDC") {
+                    console.log("USDC TVL USD", tvlUSD);
+                    console.log(pools_token);
+                  }
+                  const pools_token_red = pools_token.filter((pool: any) => (pool.tvlUSD > 25000));
                   // get token address from first pool : token 1 or token 2 depending on symbol
-                  const tokenAddress = pools_token[0].pool.token1Info.symbol === token_symbol
-                      ? pools_token[0].pool.token1
-                      : pools_token[0].pool.token2;
-                  const decimals = pools_token[0].pool.token1Info.symbol === token_symbol
-                      ? pools_token[0].pool.token1Info.decimals
-                      : pools_token[0].pool.token2Info.decimals;
+                  const tokenAddress = pools_token_red[0].pool.token1Info.symbol === token_symbol
+                      ? pools_token_red[0].pool.token1
+                      : pools_token_red[0].pool.token2;
+                  const decimals = pools_token_red[0].pool.token1Info.symbol === token_symbol
+                      ? pools_token_red[0].pool.token1Info.decimals
+                      : pools_token_red[0].pool.token2Info.decimals;
                   // console.log("OK : add default token", token_symbol, "tvlUSD", tvlUSD, "decimals", decimals);
 
                   marketAptos[token_symbol] = {

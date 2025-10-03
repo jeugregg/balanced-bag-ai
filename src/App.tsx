@@ -395,7 +395,7 @@ function App() {
               <div className="kicker">Step 1</div>
               <h3>Login & Wallet balance to invest</h3>
               <div className="step-desc">
-                Connecte ton wallet et choisis un montant (ou 25 / 50 / 100%).
+                Connect your Wallet & Choose an amount (or 25 / 50 / 100%).
               </div>
             </div>
           </div>
@@ -479,7 +479,7 @@ function App() {
               <div className="kicker">Step 2</div>
               <h3>Choose your investment strategy</h3>
               <div className="step-desc">
-                Sélectionne Secure / Balanced / Offensive et vérifie la répartition.
+                Select Secure / Balanced / Offensive and Check the Distribution.
               </div>
             </div>
           </div>
@@ -509,7 +509,7 @@ function App() {
             <div className="step-title">
               <div className="kicker">Step 3</div>
               <h3>Swap all for rebalancing</h3>
-              <div className="step-desc">Prépare et exécute les swaps pour atteindre la cible.</div>
+              <div className="step-desc">Prepare and execute the swaps to reach the target.</div>
             </div>
           </div>
 
