@@ -10,7 +10,15 @@ const WalletConnectButtons: React.FC<Props> = ({
   handleConnectAptosWallet,
 }) => (
   <div>
-    <button onClick={handleConnectWallet}>Connect Starknet Wallet</button> -{" "}
+    <button
+      onClick={handleConnectWallet}
+      disabled={true}
+      title="Starknet integration temporarily disabled due to Brian AI discontinuation"
+      style={{ opacity: 0.5, cursor: "not-allowed" }}
+    >
+      Connect Starknet Wallet (Disabled)
+    </button>
+    {" - "}
     <button onClick={handleConnectAptosWallet}>Connect Aptos Wallet</button>
   </div>
 );
