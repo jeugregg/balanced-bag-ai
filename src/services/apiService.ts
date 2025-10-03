@@ -498,6 +498,7 @@ export async function getInvestmentBreakdown(
   solution: string,
   amount: number,
   myAptosWalletAccount: any,
+  setLoadingToken: (msg: string | null) => void = () => {}
 ): Promise<InvestmentBreakdown | null> {
   try {
     let tokensData: TokenData[] = [];
@@ -561,11 +562,10 @@ export async function getInvestmentBreakdown(
       k_mini = 0.03;
       n_tokens = 10;
     } else if (solution === 'AI-Powered') {
-
+      setLoadingToken('AI is analyzing market data...');
       const response = await callTogetherDistributionApi(tokenEMA7Hourly, tokenMaxStdDev);
       if (response) {
-        console.log("Together response:", response);
-        // Use the response data to adjust k_alpha, k_mini, and n_tokens
+        setLoadingToken('AI is optimizing portfolio...');
         k_alpha = response.k_alpha || k_alpha;
         k_mini = response.k_mini || k_mini;
         n_tokens = response.n_tokens || n_tokens;
@@ -591,8 +591,10 @@ export async function getInvestmentBreakdown(
         percentage: tokenDistribution[token] * 100,
       };
     }
+    setLoadingToken(null); // Clear loading state
     return breakdown;
   } catch (error) {
+    setLoadingToken(null); // Clear loading state on error
     console.error('Error in getInvestmentBreakdown:', error);
     return null;
   }

@@ -75,6 +75,7 @@ import InvestmentBreakdown from "./components/InvestmentBreakdown";
 import SwapTable from "./components/SwapTable";
 import BrianBalancesTable from "./components/BrianBalancesTable";
 import InvestmentStrategyButtons from "./components/InvestmentStrategyButtons";
+import AIProcessingToast from "./components/AIProcessingToast";
 
 import {
   getMarket,
@@ -139,6 +140,7 @@ function App() {
   const [swapStatuses, setSwapStatuses] = useState<string[]>([]);
   const [loadingToken, setLoadingToken] = useState<string | null>(null);
   const [showAptosWalletMsg, setShowAptosWalletMsg] = useState(false);
+  const [aiProcessingMsg, setAiProcessingMsg] = useState<string | null>(null);
 
   // SDK & Wallets
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -166,7 +168,12 @@ function App() {
   // Handlers
   const handleSolutionSelect = async (solution: string) => {
     setSelectedSolution(solution);
-    const breakdown = await getInvestmentBreakdown(solution, parseFloat(investmentAmount), myAptosWalletAccount);
+    const breakdown = await getInvestmentBreakdown(
+      solution,
+      parseFloat(investmentAmount),
+      myAptosWalletAccount,
+      setAiProcessingMsg
+    );
     setInvestmentBreakdown(breakdown);
   };
 
@@ -306,14 +313,14 @@ function App() {
         const breakdown = await getInvestmentBreakdown(
           selectedSolution,
           parseFloat(investmentAmount),
-          myAptosWalletAccount
+          myAptosWalletAccount,
+          setLoadingToken
         );
         setInvestmentBreakdown(breakdown);
       } else {
         setInvestmentBreakdown(null);
       }
     };
-    
     updateBreakdown();
   }, [investmentAmount, selectedSolution]);
 
@@ -388,6 +395,8 @@ function App() {
         showAptosWalletMsg={showAptosWalletMsg}
         setShowAptosWalletMsg={setShowAptosWalletMsg}
       />
+
+      <AIProcessingToast aiProcessingMsg={aiProcessingMsg} />
 
       <main className="app-content">
         <h2>Beta Version - 0.0.2 - Starknet & Aptos</h2>
