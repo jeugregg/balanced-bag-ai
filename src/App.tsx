@@ -123,7 +123,7 @@ interface Swap {
 }
 
 const ethAmountToKeep = 2;
-const logoUrl = "/logo-BalancedBagByAi.png";
+const logoUrl = "src/assets/logo-BalancedBagByAi.png";
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState<WalletAccount | null>(null);
