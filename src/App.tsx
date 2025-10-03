@@ -164,9 +164,9 @@ function App() {
   };
 
   // Handlers
-  const handleSolutionSelect = (solution: string) => {
+  const handleSolutionSelect = async (solution: string) => {
     setSelectedSolution(solution);
-    const breakdown = getInvestmentBreakdown(solution, parseFloat(investmentAmount), myAptosWalletAccount);
+    const breakdown = await getInvestmentBreakdown(solution, parseFloat(investmentAmount), myAptosWalletAccount);
     setInvestmentBreakdown(breakdown);
   };
 
@@ -301,16 +301,20 @@ function App() {
   }, [investmentBreakdown]);
 
   useEffect(() => {
-    if (investmentAmount && selectedSolution) {
-      const breakdown = getInvestmentBreakdown(
-        selectedSolution,
-        parseFloat(investmentAmount),
-        myAptosWalletAccount
-      );
-      setInvestmentBreakdown(breakdown);
-    } else {
-      setInvestmentBreakdown(null);
-    }
+    const updateBreakdown = async () => {
+      if (investmentAmount && selectedSolution) {
+        const breakdown = await getInvestmentBreakdown(
+          selectedSolution,
+          parseFloat(investmentAmount),
+          myAptosWalletAccount
+        );
+        setInvestmentBreakdown(breakdown);
+      } else {
+        setInvestmentBreakdown(null);
+      }
+    };
+    
+    updateBreakdown();
   }, [investmentAmount, selectedSolution]);
 
   // Charts data

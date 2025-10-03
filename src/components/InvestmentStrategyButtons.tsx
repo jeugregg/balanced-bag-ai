@@ -4,7 +4,7 @@ interface Props {
   isLoading: boolean;
   totalWalletValue: number;
   selectedSolution: string;
-  handleSolutionSelect: (solution: string) => void;
+  handleSolutionSelect: (solution: string) => Promise<void>;
 }
 
 const InvestmentStrategyButtons: React.FC<Props> = ({
@@ -38,6 +38,13 @@ const InvestmentStrategyButtons: React.FC<Props> = ({
           onClick={() => handleSolutionSelect('Offensive')}
         >
           Offensive
+        </button>
+        <button
+          title="An AI-powered investment strategy that uses machine learning to optimize portfolio allocation based on market conditions and historical data."
+          className={`investment-button ai-powered ${selectedSolution === 'AI-Powered' ? 'selected' : ''}`}
+          onClick={() => handleSolutionSelect('AI-Powered')}
+        >
+          AI-Powered 🤖
         </button>
       </div>
     </>

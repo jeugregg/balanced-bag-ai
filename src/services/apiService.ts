@@ -9,6 +9,9 @@ import { AptosJSProClient } from "@aptos-labs/js-pro";
 const aptosClient = new AptosJSProClient({
   network: { network: Network.MAINNET },
 });
+import Together from 'together-ai';
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 type Coin = { coin: { value: string } };
 import {
@@ -31,7 +34,8 @@ import {
 } from "./dataUtils";
 import { TokenData, BalanceItem, InvestmentBreakdown, Swap } from "../App";
 //import { Network } from "@aptos-labs/wallet-adapter-react";
-
+const modelTogether = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free";
+const together = new Together({ apiKey: import.meta.env.VITE_APP_TOGETHER_API_KEY });
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
 const rcpApiKey = import.meta.env.VITE_RCP_API_KEY as string;
 const aptosApiKey = import.meta.env.VITE_APTOS_API_KEY as string;
@@ -490,93 +494,108 @@ export async function prepareSwapTransactions(
   setTransactionsCompleted(allTransactionsSuccessful);
 }
 
-export function getInvestmentBreakdown(
+export async function getInvestmentBreakdown(
   solution: string,
   amount: number,
   myAptosWalletAccount: any,
-): InvestmentBreakdown | null {
-  let tokensData: TokenData[] = [];
-  let goodTokensData: TokenData[] = [];
-  let tokenMcaps = {};
-  if (myAptosWalletAccount) {
-    tokensData = loadAptosTokens();
-    goodTokensData = filterNonStableTokens(tokensData);
-    tokenMcaps = getAptosMarketTokenMcap(goodTokensData);
-  } else {
-    tokensData = loadTokens();
-    goodTokensData = filterTokens(tokensData);
-    tokenMcaps = getMarketTokenMcap(goodTokensData);
-  }
-  let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
-  sortedTokens = sortedTokens.slice(0, 15); // keep only max top 15 by Mcap
-  let sortedTokensData;
-  let tokenPrices;
-  if (myAptosWalletAccount) {
-    // sort goodTokensData by sortedTokens ?? why ?
-    sortedTokensData = goodTokensData;
-    tokenPrices = getAptosMarketTokenPrice(sortedTokensData);
-  } else {
-    sortedTokensData = filterTokens(goodTokensData, sortedTokens);
-    tokenPrices = getMarketTokenPrice(sortedTokensData);
-  }
-
-  let tokenEMA7Hourly: Record<string, number> = {};
-  let tokenMaxStdDev: Record<string, number> = {};
-  for (const token of sortedTokens) {
-    let tokenPriceHistory;
+): Promise<InvestmentBreakdown | null> {
+  try {
+    let tokensData: TokenData[] = [];
+    let goodTokensData: TokenData[] = [];
+    let tokenMcaps = {};
     if (myAptosWalletAccount) {
-      tokenPriceHistory = extractAptosPrices(sortedTokensData, token);
+      tokensData = loadAptosTokens();
+      goodTokensData = filterNonStableTokens(tokensData);
+      tokenMcaps = getAptosMarketTokenMcap(goodTokensData);
     } else {
-      tokenPriceHistory = extractPrices(sortedTokensData, token);
+      tokensData = loadTokens();
+      goodTokensData = filterTokens(tokensData);
+      tokenMcaps = getMarketTokenMcap(goodTokensData);
     }
-    try {
-      const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
-      tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
-      tokenMaxStdDev[token] = tokenEMA7HourlyAndMaxStdDev.maxStdDev;
-      if (tokenMaxStdDev[token] < 2) {
-        if (tokenPrices[token] < 1.07 && tokenPrices[token] > 0.93) {
-          delete tokenEMA7Hourly[token];
-          delete tokenMaxStdDev[token];
-          sortedTokens = sortedTokens.filter(t => t !== token);
-        }
+    let sortedTokens = Object.keys(tokenMcaps).sort((a, b) => tokenMcaps[b] - tokenMcaps[a]);
+    sortedTokens = sortedTokens.slice(0, 15); // keep only max top 15 by Mcap
+    let sortedTokensData;
+    let tokenPrices;
+    if (myAptosWalletAccount) {
+      // sort goodTokensData by sortedTokens ?? why ?
+      sortedTokensData = goodTokensData;
+      tokenPrices = getAptosMarketTokenPrice(sortedTokensData);
+    } else {
+      sortedTokensData = filterTokens(goodTokensData, sortedTokens);
+      tokenPrices = getMarketTokenPrice(sortedTokensData);
+    }
+
+    let tokenEMA7Hourly: Record<string, number> = {};
+    let tokenMaxStdDev: Record<string, number> = {};
+    for (const token of sortedTokens) {
+      let tokenPriceHistory;
+      if (myAptosWalletAccount) {
+        tokenPriceHistory = extractAptosPrices(sortedTokensData, token);
+      } else {
+        tokenPriceHistory = extractPrices(sortedTokensData, token);
       }
-    } catch (error) {
-      return null;
+      try {
+        const tokenEMA7HourlyAndMaxStdDev = calculateEMA7HourlyAndMaxStdDev(tokenPriceHistory);
+        tokenEMA7Hourly[token] = tokenEMA7HourlyAndMaxStdDev.ema;
+        tokenMaxStdDev[token] = tokenEMA7HourlyAndMaxStdDev.maxStdDev;
+        if (tokenMaxStdDev[token] < 2) {
+          if (tokenPrices[token] < 1.07 && tokenPrices[token] > 0.93) {
+            delete tokenEMA7Hourly[token];
+            delete tokenMaxStdDev[token];
+            sortedTokens = sortedTokens.filter(t => t !== token);
+          }
+        }
+      } catch (error) {
+        return null;
+      }
     }
+    let k_alpha = 0.75;
+    let k_mini = 0.03;
+    let n_tokens = 10;
+    if (solution === 'Secure') {
+      k_alpha = 0.8;
+      k_mini = 0.03;
+      n_tokens = 5;
+    } else if (solution === 'Offensive') {
+      k_alpha = 0.5;
+      k_mini = 0.03;
+      n_tokens = 10;
+    } else if (solution === 'AI-Powered') {
+
+      const response = await callTogetherDistributionApi("token test");
+      if (response) {
+        console.log("Together response:", response);
+        // Use the response data to adjust k_alpha, k_mini, and n_tokens
+        k_alpha = response.k_alpha || k_alpha;
+        k_mini = response.k_mini || k_mini;
+        n_tokens = response.n_tokens || n_tokens;
+      }
+    }
+    sortedTokens = sortedTokens.slice(0, n_tokens);
+    tokenEMA7Hourly = Object.fromEntries(sortedTokens.map(token => [token, tokenEMA7Hourly[token]]));
+    tokenMaxStdDev = Object.fromEntries(sortedTokens.map(token => [token, tokenMaxStdDev[token]]));
+    //sortedTokensData = filterTokens(sortedTokensData, sortedTokens);
+    const alpha = k_alpha * Math.log(k_mini) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]));
+    let tokenDistribution: Record<string, number> = {};
+    for (const token in tokenEMA7Hourly) {
+      tokenDistribution[token] = Math.pow(tokenMcaps[token] * tokenEMA7Hourly[token] / tokenPrices[token], alpha);
+    }
+    const totalDistribution = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
+    for (const token in tokenEMA7Hourly) {
+      tokenDistribution[token] = tokenDistribution[token] / totalDistribution;
+    }
+    let breakdown: InvestmentBreakdown = {};
+    for (const token in tokenDistribution) {
+      breakdown[token] = {
+        amount: tokenDistribution[token] * amount,
+        percentage: tokenDistribution[token] * 100,
+      };
+    }
+    return breakdown;
+  } catch (error) {
+    console.error('Error in getInvestmentBreakdown:', error);
+    return null;
   }
-  let k_alpha = 0.75;
-  let k_mini = 0.03;
-  let n_tokens = 10;
-  if (solution === 'Secure') {
-    k_alpha = 0.8;
-    k_mini = 0.03;
-    n_tokens = 5;
-  } else if (solution === 'Offensive') {
-    k_alpha = 0.5;
-    k_mini = 0.03;
-    n_tokens = 10;
-  }
-  sortedTokens = sortedTokens.slice(0, n_tokens);
-  tokenEMA7Hourly = Object.fromEntries(sortedTokens.map(token => [token, tokenEMA7Hourly[token]]));
-  tokenMaxStdDev = Object.fromEntries(sortedTokens.map(token => [token, tokenMaxStdDev[token]]));
-  //sortedTokensData = filterTokens(sortedTokensData, sortedTokens);
-  const alpha = k_alpha * Math.log(k_mini) / (Math.log(tokenMcaps[sortedTokens.slice(-1)[0]] / tokenMcaps[sortedTokens.slice(0)[0]]));
-  let tokenDistribution: Record<string, number> = {};
-  for (const token in tokenEMA7Hourly) {
-    tokenDistribution[token] = Math.pow(tokenMcaps[token] * tokenEMA7Hourly[token] / tokenPrices[token], alpha);
-  }
-  const totalDistribution = Object.values(tokenDistribution).reduce((total, value) => total + value, 0);
-  for (const token in tokenEMA7Hourly) {
-    tokenDistribution[token] = tokenDistribution[token] / totalDistribution;
-  }
-  let breakdown: InvestmentBreakdown = {};
-  for (const token in tokenDistribution) {
-    breakdown[token] = {
-      amount: tokenDistribution[token] * amount,
-      percentage: tokenDistribution[token] * 100,
-    };
-  }
-  return breakdown;
 }
 
 export async function connectStarknetWallet(
@@ -858,3 +877,45 @@ export async function getMarketAptos(
     return marketAptos;
 }
 
+
+// Together AI call for prefilling invoice data
+async function callTogetherDistributionApi(ocrResults: string): any[]  {
+    if (!ocrResults) throw new Error('OCR results are required');
+
+    const prefillSchema = z.object({
+        k_alpha: z.number().describe('alpha parameter to adapt the distribution to market cap and momentum'),
+        k_mini: z.number().describe('mini parameter for lower token to avoid too much concentration on top tokens'),
+        n_tokens: z.number().describe('number of tokens to distribute'),
+    });
+    const jsonSchema = zodToJsonSchema(prefillSchema, { target: 'openAi' });
+
+    const extract = await together.chat.completions.create({
+        messages: [
+        {
+            role: 'system',
+            content:`You are a crypto quant analyst and you need to extract parameters from an equation to 
+                yield to 3 parameters.
+                The equation is : weight_token = (marketcap_token * momentum_token / price_token) ^ (alpha * log(mini) / log(marketcap_min / marketcap_max))
+                Use data of tokenEMA7Hourly and tokenMaxStdDev of all tokens to determine momentum_token.
+                When you answer, don't output your thinking process but only the result in this json format: 
+                    Output example: {k_alpha: 0.75, k_mini: 0.03, n_tokens: 10}`,
+        },
+        {
+            role: 'user',
+            content: ocrResults,
+        },
+        ],
+        model: modelTogether,
+        temperature: 0.001,
+        // @ts-ignore
+        response_format: { type: 'json_object', schema: jsonSchema },
+    });
+
+    if (extract?.choices?.[0]?.message?.content) {
+        const output = JSON.parse(extract?.choices?.[0]?.message?.content);
+        console.log(output);
+        return output;
+    }
+    return 'No output.';
+
+};
