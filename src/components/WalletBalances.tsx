@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 interface BalanceItem {
@@ -17,9 +17,78 @@ interface Props {
   investmentAmount: string;
   handleInvestmentInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handlePercentageSelect: (percentage: number) => void;
-  // value = montant $ par token (somme pour le centre)
   pieChartDataBalances: { name: string; value: number }[];
   COLORS: string[];
+}
+
+/** Hook: force ResponsiveContainer to recompute when container (re)appears or resizes */
+function useChartKey() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [key, setKey] = useState(0);
+
+  useEffect(() => {
+    // micro “kick” au mount (corrige le cas démarrage très étroit)
+    const t = setTimeout(() => setKey((k) => k + 1), 0);
+
+    let ro: ResizeObserver | null = null;
+    if (ref.current && "ResizeObserver" in window) {
+      ro = new ResizeObserver(() => setKey((k) => k + 1));
+      ro.observe(ref.current);
+    } else {
+      const onResize = () => setKey((k) => k + 1);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }
+
+    return () => {
+      clearTimeout(t);
+      if (ro && ref.current) ro.unobserve(ref.current);
+    };
+  }, []);
+
+  return { containerRef: ref, chartKey: key };
+}
+
+/* -------- Légende (barres de progression) -------- */
+function SideLegend({
+  data,
+  colors,
+  total,
+  onHover,
+  onLeave,
+}: {
+  data: { name: string; value: number }[];
+  colors: string[];
+  total: number;
+  onHover: (i: number) => void;
+  onLeave: () => void;
+}) {
+  const sorted = [...data].sort((a, b) => (b.value || 0) - (a.value || 0));
+  return (
+    <div className="side-legend">
+      <div className="legend">
+        {sorted.map((it, i) => {
+          const pct = ((Number(it.value) || 0) / (total || 1)) * 100;
+          return (
+            <div
+              key={it.name + i}
+              className="legend-item"
+              style={{ ["--p" as any]: `${pct}%` }}
+              onMouseEnter={() => onHover(i)}
+              onMouseLeave={onLeave}
+            >
+              <span
+                className="legend-dot"
+                style={{ background: colors[i % colors.length] }}
+              />
+              <div className="legend-name">{it.name}</div>
+              <div className="legend-val">{pct.toFixed(1)}%</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 const WalletBalances: React.FC<Props> = ({
@@ -35,17 +104,28 @@ const WalletBalances: React.FC<Props> = ({
   COLORS,
 }) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const { containerRef, chartKey } = useChartKey();
 
   const formatCurrency = (n: number) =>
-    n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+    n.toLocaleString(undefined, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    });
 
   const sum = useMemo(() => {
-    const s = pieChartDataBalances.reduce((acc, d) => acc + (Number(d.value) || 0), 0);
+    const s = pieChartDataBalances.reduce(
+      (acc, d) => acc + (Number(d.value) || 0),
+      0
+    );
     return s > 0 ? s : 1;
   }, [pieChartDataBalances]);
 
   const centerAmount = useMemo(() => {
-    const s = pieChartDataBalances.reduce((acc, d) => acc + (Number(d.value) || 0), 0);
+    const s = pieChartDataBalances.reduce(
+      (acc, d) => acc + (Number(d.value) || 0),
+      0
+    );
     return s > 0 ? s : totalWalletValue;
   }, [pieChartDataBalances, totalWalletValue]);
 
@@ -58,7 +138,10 @@ const WalletBalances: React.FC<Props> = ({
   };
 
   const sorted = useMemo(
-    () => [...pieChartDataBalances].sort((a, b) => (b.value || 0) - (a.value || 0)),
+    () =>
+      [...pieChartDataBalances].sort(
+        (a, b) => (b.value || 0) - (a.value || 0)
+      ),
     [pieChartDataBalances]
   );
 
@@ -67,15 +150,22 @@ const WalletBalances: React.FC<Props> = ({
       <h3>Wallet balance to invest</h3>
 
       {totalWalletValue > 0 && (
-        <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-          <label htmlFor="investmentInput">Choose Wallet Amount: $</label>
-          <input
-            type="text"
-            id="investmentInput"
-            value={investmentAmount}
-            onChange={handleInvestmentInputChange}
-            className="investment-input"
-          />
+          <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+            <label htmlFor="investmentInput">Choose Wallet Amount: $</label>
+            <input
+              type="text"
+              id="investmentInput"
+              value={investmentAmount}
+              onChange={handleInvestmentInputChange}
+              className="investment-input"
+                placeholder="Type an amount (e.g., 12.50)"
+  aria-describedby="wallet-amount-hint"
+  inputMode="decimal"
+  title="You can type an amount (e.g., 12.50) or use the 25/50/100% shortcuts."
+            />
+            <small id="wallet-amount-hint" className="field-hint">
+  You can type an amount or use the 25%, 50%, 100% buttons.
+</small>
           <div className="btn-group">
             <button
               className={`btn btn--chip ${isPctActive(25) ? "is-active" : ""}`}
@@ -105,7 +195,7 @@ const WalletBalances: React.FC<Props> = ({
         </div>
       ) : (
         <div className="two-col">
-          {/* TABLE à gauche */}
+          {/* TABLE */}
           <div>
             <div className="table-wrap">
               <table>
@@ -128,13 +218,20 @@ const WalletBalances: React.FC<Props> = ({
                   ))}
                 </tbody>
               </table>
+              
             </div>
+            {/* <<< Ajout : total sous le tableau (seulement si > 0) >>> */}
+  {totalWalletValue > 0 && (
+    <p className="total-wallet-note">
+      Total Wallet Value: {formatCurrency(totalWalletValue)}
+    </p>
+  )}
           </div>
 
-          {/* DONUT + LÉGENDE à droite */}
-          <div className="chart-col">
+          {/* DONUT + LÉGENDE */}
+          <div className="chart-col" ref={containerRef}>
             <div className="chart-box">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer key={chartKey} width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={sorted}
@@ -147,7 +244,7 @@ const WalletBalances: React.FC<Props> = ({
                     paddingAngle={3}
                     label={false}
                     labelLine={false}
-                      cornerRadius={6}
+                    cornerRadius={6}
                     stroke="#0f1831"
                     strokeWidth={2}
                     onMouseLeave={() => setHoverIndex(null)}
@@ -156,33 +253,48 @@ const WalletBalances: React.FC<Props> = ({
                       <Cell
                         key={i}
                         fill={COLORS[i % COLORS.length]}
-                        className={hoverIndex !== null && hoverIndex !== i ? "slice-dim" : ""}
+                        className={
+                          hoverIndex !== null && hoverIndex !== i
+                            ? "slice-dim"
+                            : ""
+                        }
                         onMouseEnter={() => setHoverIndex(i)}
                       />
                     ))}
                   </Pie>
                   <Tooltip
-  wrapperStyle={{ outline: "none" }}
-  contentStyle={{
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 8,
-    padding: "6px 8px",
-    color: "#111827",          // texte sombre
-    boxShadow: "0 8px 24px rgba(0,0,0,.12)",
-  }}
-  itemStyle={{ fontSize: 11, lineHeight: 1.1, color: "#111827" }}
-  labelStyle={{ fontSize: 10, color: "#6b7280", marginBottom: 2 }}
-  formatter={(v: any, n: any) => {
-    const num = Number(v) || 0;
-    const pretty =
-      Math.abs(num) >= 1000
-        ? `$${num.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-        : `$${num.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-    return [pretty, n];
-  }}
-/>
-
+                    wrapperStyle={{ outline: "none" }}
+                    contentStyle={{
+                      background: "#ffffff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 8,
+                      padding: "6px 8px",
+                      color: "#111827",
+                      boxShadow: "0 8px 24px rgba(0,0,0,.12)",
+                    }}
+                    itemStyle={{
+                      fontSize: 11,
+                      lineHeight: 1.1,
+                      color: "#111827",
+                    }}
+                    labelStyle={{
+                      fontSize: 10,
+                      color: "#6b7280",
+                      marginBottom: 2,
+                    }}
+                    formatter={(v: any, n: any) => {
+                      const num = Number(v) || 0;
+                      const pretty =
+                        Math.abs(num) >= 1000
+                          ? `$${num.toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}`
+                          : `$${num.toLocaleString(undefined, {
+                              maximumFractionDigits: 2,
+                            })}`;
+                      return [pretty, n];
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
 
@@ -199,7 +311,9 @@ const WalletBalances: React.FC<Props> = ({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>Wallet</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                    Wallet
+                  </div>
                   <div style={{ fontSize: 12, fontWeight: 800 }}>
                     {formatCurrency(centerAmount)}
                   </div>
@@ -207,37 +321,18 @@ const WalletBalances: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* LÉGENDE à droite avec barres */}
-            <div className="side-legend">
-              <div className="legend">
-                {sorted.map((it, i) => {
-                  const pct = ((Number(it.value) || 0) / (sum || 1)) * 100;
-                  return (
-                    <div
-                      key={it.name + i}
-                      className="legend-item"
-                      style={{ ["--p" as any]: `${pct}%` }}   /* largeur de la barre */
-                      onMouseEnter={() => setHoverIndex(i)}
-                      onMouseLeave={() => setHoverIndex(null)}
-                    >
-                      <span
-                        className="legend-dot"
-                        style={{ background: COLORS[i % COLORS.length] }}
-                      />
-                      <div className="legend-name">{it.name}</div>
-                      <div className="legend-val">{pct.toFixed(1)}%</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <SideLegend
+              data={pieChartDataBalances}
+              colors={COLORS}
+              total={sum}
+              onHover={(i) => setHoverIndex(i)}
+              onLeave={() => setHoverIndex(null)}
+            />
           </div>
         </div>
       )}
 
-      {totalWalletValue > 0 && (
-        <p style={{ marginTop: 8 }}>Total Wallet Value: {formatCurrency(totalWalletValue)}</p>
-      )}
+
     </>
   );
 };

@@ -54,6 +54,13 @@
  * - Improve user interface and user experience.
  * - Integrate with a decentralized exchange (DEX) aggregator for optimal swap execution.
  */
+/**
+ * @file This file contains the main application logic for the Automatic Balanced Bag by AI.
+ * @version 0.0.1
+ * @author jeugregg
+ *
+ * (trimmed header for brevity)
+ */
 
 import React, { useState, useEffect, useRef, ChangeEvent } from "react";
 import "./App.css";
@@ -89,8 +96,11 @@ import {
   fetchAptosBalances,
 } from "./services/apiService";
 
-import { isDevelopment, isProduction } from './utils/environment';
-console.log("Environment Mode:", isDevelopment() ? "Development" : isProduction() ? "Production" : "Unknown");
+import { isDevelopment, isProduction } from "./utils/environment";
+console.log(
+  "Environment Mode:",
+  isDevelopment() ? "Development" : isProduction() ? "Production" : "Unknown"
+);
 const mode_debug = false;
 const cgApiKey = import.meta.env.VITE_CG_API_KEY as string;
 
@@ -113,6 +123,7 @@ interface Swap {
 }
 
 const ethAmountToKeep = 2;
+const logoUrl = "/logo-BalancedBagByAi.png";
 
 function App() {
   const [myWalletAccount, setMyWalletAccount] = useState<WalletAccount | null>(null);
@@ -140,7 +151,30 @@ function App() {
   const [swapStatuses, setSwapStatuses] = useState<string[]>([]);
   const [loadingToken, setLoadingToken] = useState<string | null>(null);
   const [showAptosWalletMsg, setShowAptosWalletMsg] = useState(false);
+
+  // === AI processing popup (existing legacy state) ===
   const [aiProcessingMsg, setAiProcessingMsg] = useState<string | null>(null);
+  const aiToastTimer = useRef<number | null>(null);
+  const showAI = (msg: string) => {
+    if (aiToastTimer.current) {
+      clearTimeout(aiToastTimer.current);
+      aiToastTimer.current = null;
+    }
+    setAiProcessingMsg(msg);
+  };
+  const doneAI = (msg: string, autoHideMs = 1500) => {
+    setAiProcessingMsg(msg);
+    if (aiToastTimer.current) clearTimeout(aiToastTimer.current);
+    aiToastTimer.current = window.setTimeout(() => {
+      setAiProcessingMsg(null);
+      aiToastTimer.current = null;
+    }, autoHideMs);
+  };
+  const hideAI = () => {
+    if (aiToastTimer.current) clearTimeout(aiToastTimer.current);
+    aiToastTimer.current = null;
+    setAiProcessingMsg(null);
+  };
 
   // SDK & Wallets
   const brianApiKey = import.meta.env.VITE_BRIAN_API_KEY;
@@ -148,7 +182,7 @@ function App() {
   const brian = new BrianSDK({ apiKey: brianApiKey });
 
   const aptosWallet = useWallet();
-  const { aptosConnectWallets, availableWallets, installableWallets } = groupAndSortWallets([
+  const { aptosConnectWallets, availableWallets } = groupAndSortWallets([
     ...aptosWallet.wallets,
     ...aptosWallet.notDetectedWallets,
   ]);
@@ -168,13 +202,20 @@ function App() {
   // Handlers
   const handleSolutionSelect = async (solution: string) => {
     setSelectedSolution(solution);
-    const breakdown = await getInvestmentBreakdown(
-      solution,
-      parseFloat(investmentAmount),
-      myAptosWalletAccount,
-      setAiProcessingMsg
-    );
-    setInvestmentBreakdown(breakdown);
+    try {
+      showAI("Computing strategy with AI…");
+      const breakdown = await getInvestmentBreakdown(
+        solution,
+        parseFloat(investmentAmount),
+        myAptosWalletAccount,
+        setAiProcessingMsg // << important: we pass the AI toast setter
+      );
+      setInvestmentBreakdown(breakdown);
+      doneAI("Strategy computed ✓", 1200);
+    } catch (e) {
+      console.error(e);
+      doneAI("AI failed to compute strategy", 2000);
+    }
   };
 
   const handleInvestmentInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -235,23 +276,30 @@ function App() {
   };
 
   const handlePrepareSwapTransactions = async () => {
-    await prepareSwapTransactions(
-      swapsToPrepare,
-      setSwapStatuses,
-      setTransactionsCompleted,
-      brian,
-      walletAddress,
-      myWalletAccount,
-      myAptosWalletAccount,
-      setErrorWithTimeout
-    );
+    try {
+      showAI("AI is preparing swaps…");
+      await prepareSwapTransactions(
+        swapsToPrepare,
+        setSwapStatuses,
+        setTransactionsCompleted,
+        brian,
+        walletAddress,
+        myWalletAccount,
+        myAptosWalletAccount,
+        setErrorWithTimeout
+      );
+      doneAI("Swaps prepared ✓", 1800);
+    } catch (e) {
+      console.error(e);
+      doneAI("AI failed to prepare swaps", 2500);
+    }
   };
 
   const handleDisconnectWallet = () => {
     setMyWalletAccount(null);
     setWalletAddress(null);
-    setWalletBalances([]); // important: vider avec []
-    setBalances([]);       // important: vider avec []
+    setWalletBalances([]);
+    setBalances([]);
     setIsLoading(true);
   };
 
@@ -262,8 +310,8 @@ function App() {
     setSwapsToPrepare([]);
     setTransactionsCompleted(false);
     setSwapStatuses([]);
-    setWalletBalances([]); // vider
-    setBalances([]);       // vider
+    setWalletBalances([]);
+    setBalances([]);
 
     if (mode_debug !== true) {
       const market = await getMarket();
@@ -276,52 +324,71 @@ function App() {
 
   // Effects
   useEffect(() => {
-    fetchBalances(
-      walletAddress,
-      myWalletAccount,
-      setWalletBalances,
-      setBalances,
-      setTotalWalletValue,
-      setInvestmentAmount,
-      setIsLoading,
-      setLoadingToken,
-      setErrorWithTimeout
-    );
+    (async () => {
+      showAI("Fetching wallet balances…");
+      await fetchBalances(
+        walletAddress,
+        myWalletAccount,
+        setWalletBalances,
+        setBalances,
+        setTotalWalletValue,
+        setInvestmentAmount,
+        setIsLoading,
+        setLoadingToken,
+        setErrorWithTimeout
+      );
+      doneAI("Balances synced ✓", 900);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myWalletAccount]);
 
   useEffect(() => {
-    fetchAptosBalances(
-      walletAddress,
-      myAptosWalletAccount,
-      setWalletBalances,
-      setBalances,
-      setTotalWalletValue,
-      setInvestmentAmount,
-      setIsLoading,
-      setLoadingToken,
-      setErrorWithTimeout
-    );
+    (async () => {
+      if (!myAptosWalletAccount) return;
+      showAI("Fetching Aptos balances…");
+      await fetchAptosBalances(
+        walletAddress,
+        myAptosWalletAccount,
+        setWalletBalances,
+        setBalances,
+        setTotalWalletValue,
+        setInvestmentAmount,
+        setIsLoading,
+        setLoadingToken,
+        setErrorWithTimeout
+      );
+      doneAI("Aptos balances synced ✓", 900);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myAptosWalletAccount]);
 
   useEffect(() => {
     if (investmentBreakdown) handleSwapPrepare(balances, investmentBreakdown, setSwapsToPrepare);
-  }, [investmentBreakdown]);
+  }, [balances, investmentBreakdown]);
 
   useEffect(() => {
     const updateBreakdown = async () => {
       if (investmentAmount && selectedSolution) {
-        const breakdown = await getInvestmentBreakdown(
-          selectedSolution,
-          parseFloat(investmentAmount),
-          myAptosWalletAccount,
-          setLoadingToken
-        );
-        setInvestmentBreakdown(breakdown);
+        try {
+          showAI("Updating strategy…");
+          const breakdown = await getInvestmentBreakdown(
+            selectedSolution,
+            parseFloat(investmentAmount),
+            myAptosWalletAccount,
+            setAiProcessingMsg // << fix: use AI toast setter (not setLoadingToken)
+          );
+          setInvestmentBreakdown(breakdown);
+          doneAI("Strategy updated ✓", 900);
+        } catch (e) {
+          console.error(e);
+          doneAI("Update failed", 1500);
+        }
       } else {
         setInvestmentBreakdown(null);
       }
     };
     updateBreakdown();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [investmentAmount, selectedSolution]);
 
   // Charts data
@@ -360,32 +427,15 @@ function App() {
     <div>
       {/* Header */}
       <header className="app-header">
-        <h1>Automatic Balanced Bag by AI</h1>
-        <p>Rebalance your Wallet Portfolio using AI-powered strategies.</p>
-        <p>
-          <i>
-            Aptos : Powered by{" "}
-            <a href="https://hyperion.xyz/" target="_blank" rel="noopener noreferrer">
-              Hyperion
-            </a>{" "}
-            and{" "}
-            <a href="https://scrt.network/secret-ai" target="_blank" rel="noopener noreferrer">
-              Secrect AI (Secret Network)
-            </a>.
-          </i>
-        </p>
-        <p>
-          <i>
-            Starknet : Powered by{" "}
-            <a href="https://app.avnu.fi/" target="_blank" rel="noopener noreferrer">
-              AVNU Finance
-            </a>{" "}
-            and{" "}
-            <a href="https://www.brianknows.org/" target="_blank" rel="noopener noreferrer">
-              Brian AI Agent (discountinued)
-            </a>.
-          </i>
-        </p>
+        <img
+          src={logoUrl}
+          alt="Balanced Bag by AI logo"
+          style={{ width: 100, height: 100, borderRadius: 12, verticalAlign: "middle", marginRight: 12 }}
+        />
+        <div style={{ display: "inline-block", textAlign: "left", verticalAlign: "middle" }}>
+          <h1 style={{ margin: "0 0 4px" }}>Automatic Balanced Bag by AI</h1>
+          <p style={{ margin: 0 }}>Rebalance your Wallet Portfolio using AI-powered strategies.</p>
+        </div>
       </header>
 
       <ErrorMessageBox
@@ -396,6 +446,7 @@ function App() {
         setShowAptosWalletMsg={setShowAptosWalletMsg}
       />
 
+      {/* Single source of truth for AI popup */}
       <AIProcessingToast aiProcessingMsg={aiProcessingMsg} />
 
       <main className="app-content">
@@ -424,7 +475,15 @@ function App() {
               </div>
             ) : (
               <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
                   <h4 style={{ margin: 0 }}>
                     Wallet: {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}
                   </h4>
@@ -432,28 +491,6 @@ function App() {
                 </div>
 
                 <div style={{ marginTop: 12 }}>
-                  <h3 style={{ margin: "8px 0" }}>Wallet balance to invest</h3>
-
-                  {totalWalletValue > 0 && (
-                    <div style={{ display: "grid", gap: 8 }}>
-                      <label htmlFor="investmentInput">Choose Wallet Amount: $</label>
-                      <input
-                        type="text"
-                        id="investmentInput"
-                        value={investmentAmount}
-                        onChange={handleInvestmentInputChange}
-                        className="investment-input"
-                      />
-
-                      {/* Groupe de boutons 25/50/100 (espacement 3px) */}
-                      <div className="btn-group">
-                        <button onClick={() => handlePercentageSelect(25)} className="btn btn--chip">25%</button>
-                        <button onClick={() => handlePercentageSelect(50)} className="btn btn--chip">50%</button>
-                        <button onClick={() => handlePercentageSelect(100)} className="btn btn--chip">100%</button>
-                      </div>
-                    </div>
-                  )}
-
                   {isLoading ? (
                     <div className="loading-container" style={{ gap: 10 }}>
                       <FontAwesomeIcon icon={faSpinner} spin />
@@ -472,10 +509,6 @@ function App() {
                       pieChartDataBalances={pieChartDataBalances}
                       COLORS={COLORS}
                     />
-                  )}
-
-                  {totalWalletValue > 0 && (
-                    <p style={{ marginTop: 8 }}>Total Wallet Value: ${totalWalletValue.toFixed(5)}</p>
                   )}
 
                   <BrianBalancesTable balancesWithBrian={balancesWithBrian} />
@@ -549,7 +582,7 @@ function App() {
         >
           <FontAwesomeIcon icon={faGithub} className="footer-icon" /> GitHub Repository
         </a>{" "}
-        - 2025 - Built by jeugregg
+        - 2025 - Built by jeugregg & FredericAtlan
       </footer>
     </div>
   );
