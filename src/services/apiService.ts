@@ -422,7 +422,7 @@ export async function prepareSwapTransactions(
           safeMode: false
         });
 
-        const newCurrencyBAmount = Math.floor((1-0.5/100)*swap.amount / tokens[swap.buy]["currentPrice"] * (10 ** tokens[swap.buy]["decimals"]));
+        const newCurrencyBAmount = Math.floor((1-2/100)*swap.amount / tokens[swap.buy]["currentPrice"] * (10 ** tokens[swap.buy]["decimals"]));
 
         const params = {
           // here must be fa type
@@ -430,7 +430,7 @@ export async function prepareSwapTransactions(
           currencyB: tokens[swap.buy].address,
           currencyAAmount,
           currencyBAmount,
-          slippage: 0.5,
+          slippage: 2, // 2%
           poolRoute,
           recipient: walletAddress, // '',
         };
