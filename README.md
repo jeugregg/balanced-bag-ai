@@ -1,14 +1,57 @@
 # Balanced bag by AI
 
-## For StarkNet Wallet
+A portfolio manager for both StarkNet and Aptos blockchains designed to automatically rebalance your wallet assets using AI.
+
+Web Live App link : [https://balanced-bag-ai.netlify.app/](https://balanced-bag-ai.netlify.app/)
+
+Video demo link : [https://youtu.be/T-NDKHDWJD0](https://youtu.be/T-NDKHDWJD0)  
+## Common Features
+
+**Strategies:**
+
+* **Secure:** Conservative approach with focus on established tokens
+* **Balanced:** Moderate risk-reward with market cap weighted allocations
+* **Offensive:** Aggressive strategy for higher potential returns
+* **AI-Powered:** Dynamic allocation using AI market analysis
+
+**Technology:**
+
+* **React & TypeScript:** Modern front-end development
+* **Vite:** Fast build tool and development server
+* **AI Integration:** Smart portfolio optimization
+* **Multi-Chain Support:** Unified interface for both StarkNet and Aptos
+
+
+## Supported Blockchains
+
+This project is for educational and demonstration purposes only. Use it at your own risk. Always do your own research before investing in cryptocurrencies.
+
+### Aptos Wallet
+
+Built on the Aptos blockchain ([Aptos website](https://aptosfoundation.org/)), this integration provides fast, secure, and efficient portfolio management.
+
+**Features:**
+
+* **Native Aptos Support:** Seamless integration with Aptos blockchain
+* **Hyperion DEX Integration:** Direct access to Hyperion's liquidity pools  [https://hyperion.xyz/pools](https://hyperion.xyz/pools)
+* **Real-time Market Data:** Live pricing and liquidity information
+* **Automated Portfolio Rebalancing:** AI-powered portfolio optimization
+
+**Technology Stack for Aptos:**
+
+* **Aptos Blockchain:** A Layer-1 blockchain built for safe and scalable applications
+* **Hyperion DEX:** Leading decentralized exchange on Aptos providing deep liquidity and efficient swaps
+* **Secret Network AI:** AI platform for optimizing portfolio allocations
+* **Petra Wallet:** Official Aptos wallet for secure transactions
+
+
+
+### StarkNet Wallet
 
 This web app is a portfolio manager on the StarkNet blockchain ([StarkNet website](https://starkware.co/starknet/)) designed to automatically rebalance your wallet assets using AI.
 
 To be effective, you need to execute it every weeks or months.
 
-Web App link : [https://balanced-bag-ai.netlify.app/](https://balanced-bag-ai.netlify.app/)
-
-Video demo link : [https://youtu.be/xfpcEbP8ETc](https://youtu.be/xfpcEbP8ETc)  
 
 **Features:**
 
@@ -58,10 +101,20 @@ Video demo link : [https://youtu.be/xfpcEbP8ETc](https://youtu.be/xfpcEbP8ETc)
 
 **Disclaimer:** 
 
-This project is for educational and demonstration purposes only. Use it at your own risk. Always do your own research before investing in cryptocurrencies.
 
 ## Issues
 
-- **Token Availability and Prices:** Please note that all tokens on StarkNet and their corresponding prices may not always be available. This can be due to various factors such as market volatility, data provider limitations, or temporary technical issues. 
-- **Swap Issues (USDC and Low Liquidity Tokens):** You might encounter difficulties when swapping USDC or tokens with low liquidity. These issues could manifest as failed transactions or unfavorable exchange rates. This is often due to insufficient liquidity in the corresponding pools. 
+- **Token Availability and Prices:** Token availability and pricing may vary across both StarkNet and Aptos networks.
+- **Liquidity Considerations:** 
+  - StarkNet: USDC and low liquidity tokens may face swap issues on AVNU
+  - Aptos: Some token pairs may have limited liquidity on Hyperion
+- **Network-Specific Limitations:** Each blockchain may have its own transaction speed and cost considerations
+
+## Security
+
+This dApp connects to your wallet but never stores private keys. All transactions require explicit user approval through your wallet (Argent X for StarkNet, Petra for Aptos).
+
+**Disclaimer:** 
+
+This project is for educational and demonstration purposes. Use at your own risk. Always DYOR (Do Your Own Research) before investing in cryptocurrencies.
 
