@@ -40,6 +40,7 @@ const hyper_sdk = initHyperionSDK({
     network: Network.MAINNET, 
     APTOS_API_KEY: aptosApiKey
 });
+import { fetchWithProxy } from './proxyService';
 
 // --- GLOBAL CORS SOLUTION FOR COINGECKO ---
 // Use a proxy for CoinGecko requests to avoid CORS issues in development.
@@ -86,7 +87,7 @@ export async function getMarket(): Promise<TokenData[] | null> {
         method: 'GET',
         headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
       };
-      const res_cg = await fetch(url, options);
+      const res_cg = await fetchWithProxy(url, options);
       const data_cg = await res_cg.json();
       const index_WBTC = data.findIndex((token: TokenData) => token.symbol === "WBTC");
       if (index_WBTC != -1) {
@@ -679,7 +680,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
           headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
       };
       await new Promise(resolve => setTimeout(resolve, 1000));
-      const res_cg = await fetchCoinGecko(url, options);
+      const res_cg = await fetchWithProxy(url, options);
       const data_cg = await res_cg.json();
       const index_token = poolItems.findIndex((pool: any) => (pool.pool.token1Info.symbol === token_symbol) || (pool.pool.token2Info.symbol === token_symbol));
       if (index_token != -1) {
@@ -777,7 +778,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
                     headers: { accept: 'application/json', 'x-cg-demo-api-key': cgApiKey }
                 };
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                const res_cg_token = await fetchCoinGecko(url_token, options_token);
+                const res_cg_token = await fetchWithProxy(url_token, options_token);
                 const data_cg_token = await res_cg_token.json();
                 if (data_cg_token && data_cg_token.length > 0) {
                     marketcap_usd = data_cg_token[0]["market_cap"];
@@ -820,7 +821,7 @@ export async function getMarketAptos(): Promise<Record<string, any>> {
             body: undefined,
         };
         await new Promise(resolve => setTimeout(resolve, 1000));
-        const res_cg = await fetchCoinGecko(url, options);
+        const res_cg = await fetchWithProxy(url, options);
         const data_cg = await res_cg.json();
         if (data_cg && data_cg.prices) {
 
