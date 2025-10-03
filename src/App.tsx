@@ -428,8 +428,8 @@ function App() {
       {/* Header */}
       <header className="app-header">
         <img
-          src={logoUrl}
-          alt="Balanced Bag by AI logo"
+          src="/images/logo-BalancedBagByAi.png"
+          alt="Balanced Bag By AI"
           style={{ width: 100, height: 100, borderRadius: 12, verticalAlign: "middle", marginRight: 12 }}
         />
         <div style={{ display: "inline-block", textAlign: "left", verticalAlign: "middle" }}>
